@@ -130,6 +130,58 @@ const EMPTY_DATA: AppData = {
   nutritionTarget: { calories: 0, protein: 0, carbs: 0, fat: 0 },
 };
 
+const LEGACY_GYM_LIBRARY = [
+  ["باي بريتشر", "البايسبس", "آلة"],
+  ["باي سواعد كيبل", "البايسبس", "كيبل"],
+  ["بطات ليق بريس", "السمانة", "آلة"],
+  ["تراي اوفر هيد بناتا", "الترايسبس", "آلة"],
+  ["تراي بوش داون سايبكس", "الترايسبس", "آلة"],
+  ["صدر علوي مسطره", "الصدر", "بار"],
+  ["صدر فلاي بناتا", "الصدر", "آلة"],
+  ["ظهر ابر تقفيل بناتا", "الظهر", "آلة"],
+  ["ظهر تقفيل الاحمر", "الظهر", "آلة"],
+  ["ظهر لاتس جانبي بناتا", "الظهر", "آلة"],
+  ["فخذ امامي", "الأرجل الأمامية", "آلة"],
+  ["فخذ تفتيح", "الألوية", "آلة"],
+  ["فخذ تقفيل", "الأرجل الداخلية", "آلة"],
+  ["فخذ خلفي", "الأرجل الخلفية", "آلة"],
+  ["كتف بريس", "الأكتاف", "آلة"],
+  ["كتف جانبي", "الأكتاف", "آلة"],
+  ["كتف خلفي بيك ديك", "الأكتاف", "آلة"],
+  ["هاك سكوات", "الأرجل الأمامية", "آلة"],
+  ["هيب ثرست", "الألوية", "آلة"],
+] as const;
+
+function importLegacyGym(data: AppData) {
+  const equipmentNames = new Set(data.equipment.map((item) => item.name));
+  const exerciseNames = new Set(data.exercises.map((item) => item.name));
+  const now = new Date().toISOString();
+  const equipment: Equipment[] = [];
+  const exercises: Exercise[] = [];
+
+  LEGACY_GYM_LIBRARY.forEach(([name, primaryMuscle, type], index) => {
+    const existingEquipment = data.equipment.find((item) => item.name === name);
+    const equipmentId = existingEquipment?.id ?? `legacy-equipment-${index + 1}`;
+    if (!equipmentNames.has(name)) {
+      equipment.push({ id: equipmentId, name, primaryMuscle, type, createdAt: now });
+    }
+    if (!exerciseNames.has(name)) {
+      exercises.push({
+        id: `legacy-exercise-${index + 1}`,
+        name,
+        equipmentId,
+        primaryMuscle,
+        repMin: 8,
+        repMax: 12,
+      });
+    }
+  });
+
+  return equipment.length || exercises.length
+    ? { data: { ...data, equipment: [...equipment, ...data.equipment], exercises: [...exercises, ...data.exercises] }, imported: equipment.length }
+    : { data, imported: 0 };
+}
+
 const MUSCLES = [
   "الصدر",
   "الظهر",
@@ -138,6 +190,7 @@ const MUSCLES = [
   "الترايسبس",
   "الأرجل الأمامية",
   "الأرجل الخلفية",
+  "الأرجل الداخلية",
   "الألوية",
   "السمانة",
   "البطن",
@@ -368,6 +421,13 @@ export default function Home() {
         }
       }
       if (!active) return;
+      const imported = importLegacyGym(next);
+      next = imported.data;
+      if (imported.imported) {
+        await saveAppData(next);
+        if (isSupabaseConfigured()) void saveOwnerSnapshot(next).catch(() => undefined);
+        setToast(`تم استيراد ${imported.imported} جهازًا من مكتبتك السابقة`);
+      }
       setData(next);
       setLoaded(true);
     })();
