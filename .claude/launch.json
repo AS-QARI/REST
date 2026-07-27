@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rest-dev",
+      "runtimeExecutable": "/Users/zxs/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/pnpm",
+      "runtimeArgs": ["--dir", "web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
