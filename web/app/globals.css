@@ -191,3 +191,117 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .set-target, .photo-upload > div, .photo-upload > img { border-color: rgba(255,255,255,.25); color: #fff; background: #1b1b1b; }
 .toast { border-color: rgba(255,255,255,.24); color: #fff; background: #202020; }
 .toast svg { color: #fff; }
+
+/* iPhone 11 Pro Max (414 × 896): each product view stays inside one screen. */
+@media (max-width: 500px) and (max-height: 920px) {
+  html, body { height: 100%; overflow: hidden; }
+  .app-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: max(10px, env(safe-area-inset-top)) 14px calc(78px + env(safe-area-inset-bottom));
+  }
+  .app-top { min-height: 32px; margin-bottom: 0; }
+  .brand-mark { width: 26px; height: 26px; }
+  .brand-rest { font-size: 16px; }
+  .brand-ar { font-size: 15px; }
+  .page-content {
+    height: calc(100dvh - 124px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+  .bottom-nav { min-height: 68px; padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .bottom-nav button { gap: 2px; font-size: 10px; }
+  .bottom-nav svg { width: 18px; height: 18px; }
+
+  .daily-heading { padding: 15px 4px 12px; }
+  .daily-heading h1 { margin: 8px 0 5px; font-size: 37px; }
+  .daily-heading p { font-size: 12px; }
+  .daily-focus { min-height: 109px; gap: 10px; padding: 15px; border-radius: 22px; }
+  .daily-focus h2 { font-size: 18px; }
+  .daily-focus span { margin-top: 3px; font-size: 11px; }
+  .daily-focus .app-button { min-height: 39px; font-size: 12px; }
+  .daily-focus.active-hero { min-height: 91px; padding: 13px; }
+  .section-block, .today-pulse { margin-top: 16px; }
+  .section-title { margin-bottom: 8px; }
+  .section-title h2 { font-size: 17px; }
+  .eyebrow { font-size: 10px; }
+  .status-grid { gap: 7px; }
+  .status-card { min-height: 79px; padding: 11px; border-radius: 16px; }
+  .status-card:nth-child(1) { min-height: 69px; }
+  .status-card svg { width: 17px; height: 17px; }
+  .status-card p { font-size: 10px; }
+  .status-card strong { margin-top: 2px; font-size: 12px; }
+  .quick-actions button { min-height: 67px; border-radius: 16px; font-size: 11px; }
+  .quick-actions svg { width: 18px; height: 18px; }
+
+  .page-heading { padding: 10px 4px 11px; }
+  .page-heading h1 { font-size: 28px; }
+  .segment-control { margin-top: 0; }
+  .segment-control button { min-height: 33px; }
+  .empty-state { padding: 22px 17px; border-radius: 20px; }
+  .empty-icon { width: 44px; height: 44px; margin-bottom: 8px; border-radius: 14px; }
+  .empty-icon svg { width: 22px; height: 22px; }
+  .empty-state h2 { font-size: 16px; }
+  .empty-state p { margin: 4px 0 12px; font-size: 11px; line-height: 1.5; }
+  .empty-state .app-button { min-height: 39px; font-size: 12px; }
+  .secondary-cta { margin-top: 9px; }
+  .template-card, .equipment-card, .meal-card, .session-card { padding: 10px; border-radius: 16px; }
+  .template-symbol, .meal-icon, .session-symbol { width: 37px; height: 37px; border-radius: 12px; }
+  .equipment-image { width: 48px; height: 48px; border-radius: 13px; }
+  .template-card h2, .equipment-card h2, .meal-card h2, .session-card h2 { font-size: 14px; }
+  .template-card p, .equipment-card p, .meal-card p, .session-card p { margin-top: 2px; font-size: 10px; }
+  .equipment-list, .template-list, .meal-list, .session-list { gap: 7px; }
+  .view-equipment .equipment-card:nth-child(n + 5), .view-templates .template-card:nth-child(n + 4), .view-progress .session-card:nth-child(n + 4) { display: none; }
+
+  .live-header { padding: 4px 0 8px; }
+  .live-header h1 { font-size: 20px; }
+  .live-metrics { margin-bottom: 9px; }
+  .live-metrics article { padding: 8px; }
+  .exercise-tabs { padding-bottom: 7px; }
+  .exercise-tabs button { padding: 7px 10px; font-size: 11px; }
+  .exercise-log-card { padding: 13px; border-radius: 20px; }
+  .exercise-log-title h2 { font-size: 18px; }
+  .previous-performance { margin: 9px 0; padding: 8px; font-size: 11px; }
+  .set-history { max-height: 94px; margin: 9px 0; overflow: hidden; }
+  .set-chip { padding: 9px; border-radius: 12px; }
+  .set-chip:nth-child(n + 3) { display: none; }
+  .quick-set-composer { gap: 8px; padding: 10px; border-radius: 15px; }
+  .composer-heading h3 { font-size: 13px; }
+  .composer-inputs input, .composer-inputs select { min-height: 36px; }
+  .composer-footer .app-button { min-height: 36px; }
+  .set-kind-toggle button { min-height: 28px; }
+
+  .nutrition-summary { gap: 13px; padding: 13px; border-radius: 21px; }
+  .calorie-ring { width: 96px; height: 96px; }
+  .calorie-ring > div { width: 78px; height: 78px; }
+  .calorie-ring strong { font-size: 17px; }
+  .macro-summary h2 { font-size: 15px; }
+  .macro-grid { margin-top: 8px; gap: 6px; }
+  .macro-card { padding: 9px 7px; border-radius: 13px; }
+  .macro-card b { font-size: 12px; }
+  .macro-card small { display: none; }
+  .view-nutrition .day-group, .view-nutrition > .section-block:last-child { display: none; }
+
+  .progress-overview { gap: 6px; }
+  .progress-overview article { padding: 10px 8px; border-radius: 14px; }
+  .progress-overview strong { font-size: 17px; }
+  .performance-strip { margin-top: 7px; }
+  .recovery-card { margin-top: 7px; padding: 11px; }
+  .view-progress > .section-block:last-child { display: none; }
+
+  .sheet-backdrop { align-items: center; padding: 12px; }
+  .sheet { max-height: calc(100dvh - 24px); overflow: hidden; padding: 8px 16px 16px; border-radius: 24px; }
+  .sheet-handle { margin-bottom: 8px; }
+  .sheet-header { margin-bottom: 10px; }
+  .sheet-header h2 { font-size: 18px; }
+  .form-stack { gap: 9px; }
+  .form-stack label { gap: 4px; font-size: 12px; }
+  .form-stack input, .form-stack select { min-height: 40px; border-radius: 11px; }
+  .photo-upload > div, .photo-upload > img { min-height: 58px; }
+  .photo-upload p { margin: 3px 0 0; font-size: 10px; }
+  .check-row { min-height: 38px; padding: 0 10px; }
+  .exercise-picker { gap: 4px; }
+  .exercise-picker .check-row:nth-of-type(n + 6) { display: none; }
+  .form-hint { padding: 8px; font-size: 10px; }
+  .sheet .app-button { min-height: 40px; }
+}

@@ -1014,7 +1014,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <div className="app-top"><Logo /><button className="icon-button surface" onClick={logout} aria-label="تسجيل الخروج"><LogOut size={18} /></button></div>
-      <div className="page-content">{content}</div>
+      <div className={`page-content view-${tab} view-${workoutView}`}>{content}</div>
       <nav className="bottom-nav" aria-label="التنقل الرئيسي">
         {NAVIGATION.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={20} /><span>{label}</span></button>)}
       </nav>
