@@ -189,6 +189,14 @@ function formatDuration(startedAt: string) {
   return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}` : `${minutes} د`;
 }
 
+function mealEmoji(category: string) {
+  const emojis: Record<string, string> = {
+    "فطور": "🥣", "غداء": "🍛", "عشاء": "🍽️", "سناك": "🍎",
+    "قبل التمرين": "⚡", "بعد التمرين": "💪",
+  };
+  return emojis[category] ?? "🍴";
+}
+
 function sumMeal(meals: Meal[]) {
   return meals.reduce(
     (sum, meal) => ({
@@ -716,16 +724,14 @@ export default function Home() {
 
   const todayContent = (
     <>
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">{todayLabel}</p>
-          <h1>صباح القوة يا OREZ</h1>
-        </div>
-        <div className="sync-badge"><span /> {supabaseConfigured ? "Supabase + حفظ محلي" : "محفوظ محليًا"}</div>
+      <header className="daily-heading">
+        <div className="daily-date"><span className="pulse-dot" /> {todayLabel}</div>
+        <h1>تحرّك على إيقاعك.</h1>
+        <p>خطوة صغيرة الآن، وأثر كبير لاحقًا.</p>
       </header>
 
       {data.activeWorkout ? (
-        <section className="hero-card active-hero">
+        <section className="daily-focus active-hero">
           <div className="hero-icon"><Activity size={24} /></div>
           <div>
             <p>تمرين جارٍ الآن</p>
@@ -737,40 +743,41 @@ export default function Home() {
           </button>
         </section>
       ) : (
-        <section className="hero-card">
-          <div className="hero-icon"><Dumbbell size={24} /></div>
+        <section className="daily-focus">
+          <div className="focus-number">01</div>
           <div>
-            <p>التمرين</p>
-            <h2>ماذا ستنجز اليوم؟</h2>
-            <span>ابدأ بحصة فارغة أو من جدول أنشأته.</span>
+            <p>أولوية اليوم</p>
+            <h2>جاهز لتمرينك؟</h2>
+            <span>ابدأ الآن، واختر التمارين داخل النادي.</span>
           </div>
-          <AppButton onClick={() => startWorkout()} icon={<Plus size={18} />}>ابدأ</AppButton>
+          <AppButton onClick={() => startWorkout()} icon={<ArrowLeft size={18} />}>ابدأ التمرين</AppButton>
         </section>
       )}
 
-      <section className="section-block">
+      <section className="section-block today-pulse">
         <div className="section-title">
-          <div><p className="eyebrow">لقطة اليوم</p><h2>المهم الآن</h2></div>
+          <div><p className="eyebrow">لوحة اليوم</p><h2>كل شيء في لمحة</h2></div>
+          <div className="sync-badge"><span /> {supabaseConfigured ? "متزامن" : "محفوظ على جهازك"}</div>
         </div>
         <div className="status-grid">
           <article className="status-card status-workout">
             <Dumbbell size={20} />
-            <p>التمرين</p>
+            <p>الحركة</p>
             <strong>{data.sessions.length ? "تمارينك محفوظة" : "لم تُسجّل بعد"}</strong>
           </article>
           <article className="status-card status-nutrition">
             <Flame size={20} />
-            <p>السعرات</p>
+            <p>السعرات 🔥</p>
             <strong>{formatNumber(nutrition.calories)}{data.nutritionTarget.calories ? ` / ${formatNumber(data.nutritionTarget.calories)}` : " kcal"}</strong>
           </article>
           <article className="status-card status-protein">
             <Salad size={20} />
-            <p>البروتين</p>
+            <p>البروتين 💪</p>
             <strong>{formatNumber(nutrition.protein)}{data.nutritionTarget.protein ? ` / ${formatNumber(data.nutritionTarget.protein)} غ` : " غ"}</strong>
           </article>
           <article className="status-card status-recovery">
             <HeartPulse size={20} />
-            <p>التعافي</p>
+            <p>التعافي ✨</p>
             <strong>{data.sessions.length ? "قيد التقدير" : "بيانات غير كافية"}</strong>
           </article>
         </div>
@@ -778,12 +785,12 @@ export default function Home() {
 
       <section className="section-block compact-section">
         <div className="section-title">
-          <div><p className="eyebrow">خطوة واحدة</p><h2>إضافة سريعة</h2></div>
+          <div><p className="eyebrow">بضغطة واحدة</p><h2>إضافة سريعة</h2></div>
         </div>
         <div className="quick-actions">
-          <button onClick={() => { setTab("workout"); setWorkoutView("equipment"); setSheet("equipment"); }}><Camera size={20} /><span>جهاز</span></button>
-          <button onClick={() => setSheet("meal")}><Utensils size={20} /><span>وجبة</span></button>
-          <button onClick={() => { setTab("workout"); setSheet("template"); }}><ClipboardList size={20} /><span>جدول</span></button>
+          <button onClick={() => startWorkout()}><Dumbbell size={20} /><span>تمرين الآن</span></button>
+          <button onClick={() => setSheet("meal")}><span className="quick-emoji">🍽️</span><span>وجبة</span></button>
+          <button onClick={() => { setTab("workout"); setWorkoutView("equipment"); }}><Camera size={20} /><span>المعدات</span></button>
         </div>
       </section>
     </>
@@ -792,7 +799,7 @@ export default function Home() {
   const workoutContent = (
     <>
       <header className="page-heading">
-        <div><p className="eyebrow">تمرّن بطريقتك</p><h1>التمرين</h1></div>
+        <div><p className="eyebrow">بلا جداول معقدة</p><h1>التمرين</h1></div>
         <button className="icon-button surface" onClick={() => setWorkoutView("equipment")} aria-label="إدارة المعدات"><Settings2 size={20} /></button>
       </header>
       {data.activeWorkout ? (
@@ -802,7 +809,7 @@ export default function Home() {
       ) : null}
       {workoutView !== "active" && (
         <div className="segment-control" role="tablist" aria-label="أقسام التمرين">
-          <button className={workoutView === "templates" ? "selected" : ""} onClick={() => setWorkoutView("templates")}>جداولي</button>
+          <button className={workoutView === "templates" ? "selected" : ""} onClick={() => setWorkoutView("templates")}>ابدأ الآن</button>
           <button className={workoutView === "equipment" ? "selected" : ""} onClick={() => setWorkoutView("equipment")}>المعدات</button>
         </div>
       )}
@@ -810,11 +817,10 @@ export default function Home() {
       {workoutView === "templates" && (
         <section className="section-block">
           <div className="section-title">
-            <div><p className="eyebrow">بدون خطط جاهزة</p><h2>جداولك</h2></div>
-            <button className="text-action" onClick={() => setSheet("template")}><Plus size={17} /> إنشاء</button>
+            <div><p className="eyebrow">ادخل النادي وابدأ</p><h2>تمرين مباشر</h2></div>
           </div>
           {data.templates.length === 0 ? (
-            <EmptyState icon={<FolderPlus size={27} />} title="ابنِ جدولك الأول" body="أضف معداتك وتمارينك، ثم رتّبها في جدول خاص بك." action={<AppButton onClick={() => setSheet("template")} icon={<Plus size={18} />}>إنشاء جدول</AppButton>} />
+            <EmptyState icon={<Dumbbell size={27} />} title="ابدأ من أرض النادي" body="أنشئ حصة، أضف تمرينك الحالي، وسجّل مجموعاتك فورًا. المعدات محفوظة في قسم مستقل." action={<AppButton onClick={() => startWorkout()} icon={<ArrowLeft size={18} />}>ابدأ تمرينًا</AppButton>} />
           ) : (
             <div className="template-list">
               {data.templates.map((template) => (
@@ -827,7 +833,7 @@ export default function Home() {
               ))}
             </div>
           )}
-          <div className="secondary-cta"><span>أو سجّل حصة غير مخططة</span><AppButton variant="secondary" onClick={() => startWorkout()} icon={<Dumbbell size={18} />}>تمرين فارغ</AppButton></div>
+          <div className="secondary-cta"><span>لا تحتاج خطة جاهزة لتبدأ.</span><AppButton variant="secondary" onClick={() => startWorkout()} icon={<Dumbbell size={18} />}>تمرين جديد</AppButton></div>
         </section>
       )}
 
@@ -858,7 +864,7 @@ export default function Home() {
       {workoutView === "active" && data.activeWorkout && (
         <section className="live-workout">
           <div className="live-header">
-            <button className="icon-button surface" onClick={() => setWorkoutView("templates")} aria-label="العودة للجداول"><ChevronLeft size={20} /></button>
+            <button className="icon-button surface" onClick={() => setWorkoutView("templates")} aria-label="العودة لبدء التمرين"><ChevronLeft size={20} /></button>
             <div><p className="eyebrow">حصة جارية · {formatDuration(data.activeWorkout.startedAt)}</p><h1>{data.activeWorkout.name}</h1></div>
             <button className="finish-button" onClick={finishWorkout}>إنهاء</button>
           </div>
@@ -886,9 +892,8 @@ export default function Home() {
                   {latestSetFor(activeExerciseMeta.id) ? (
                     <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
                   ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
-                  <div className="set-table" role="table" aria-label="مجموعات التمرين">
-                    <div className="set-row set-head" role="row"><span>النوع</span><span>الوزن</span><span>التكرارات</span><span>RIR</span></div>
-                    {activeExercise.sets.length === 0 ? <p className="no-sets">أضف مجموعة العمل الأولى — ستظهر هنا فور حفظها.</p> : activeExercise.sets.map((set, index) => <div className="set-row" role="row" key={set.id}><span>{set.type === "warmup" ? "إحماء" : `#${index + 1}`}</span><b dir="ltr">{set.weightKg} كغ</b><b dir="ltr">{set.reps}</b><span>{set.rir ?? "—"}</span></div>)}
+                  <div className="set-history" aria-label="مجموعات التمرين">
+                    {activeExercise.sets.length === 0 ? <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p> : activeExercise.sets.map((set, index) => <article className="set-chip" key={set.id}><span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${index + 1}`}</span><b dir="ltr">{set.weightKg} <small>كغ</small></b><b dir="ltr">× {set.reps}</b><span>RIR {set.rir ?? "—"}</span></article>)}
                   </div>
                   <form
                     className="quick-set-composer"
@@ -930,21 +935,21 @@ export default function Home() {
           <div><span>السعرات</span><strong>{formatNumber(nutrition.calories)}</strong><small>{data.nutritionTarget.calories ? `من ${formatNumber(data.nutritionTarget.calories)}` : "حدد هدفك"}</small></div>
         </div>
         <div className="macro-summary">
-          <p className="eyebrow">اليوم</p>
-          <h2>{data.nutritionTarget.calories ? `${formatNumber(Math.max(0, data.nutritionTarget.calories - nutrition.calories))} kcal متبقية` : "حدّد أهدافك أولًا"}</h2>
+          <p className="eyebrow">اليوم 🍽️</p>
+          <h2>{data.nutritionTarget.calories ? `${formatNumber(Math.max(0, data.nutritionTarget.calories - nutrition.calories))} kcal متبقية` : "حدّد أهدافك أولًا ✨"}</h2>
           <button className="text-action" onClick={openTargetSheet}><Settings2 size={16} /> ضبط الأهداف</button>
         </div>
       </section>
       <div className="macro-grid">
         {[
-          ["بروتين", nutrition.protein, data.nutritionTarget.protein, "protein"],
-          ["كربوهيدرات", nutrition.carbs, data.nutritionTarget.carbs, "carbs"],
-          ["دهون", nutrition.fat, data.nutritionTarget.fat, "fat"],
+          ["بروتين 💪", nutrition.protein, data.nutritionTarget.protein, "protein"],
+          ["كربوهيدرات ⚡", nutrition.carbs, data.nutritionTarget.carbs, "carbs"],
+          ["دهون 🥑", nutrition.fat, data.nutritionTarget.fat, "fat"],
         ].map(([label, current, target, tone]) => <article className="macro-card" key={String(label)}><div><span>{label}</span><b>{formatNumber(Number(current))} غ</b></div><div className="macro-track"><span className={String(tone)} style={{ width: `${Number(target) ? Math.min(100, (Number(current) / Number(target)) * 100) : 0}%` }} /></div><small>{Number(target) ? `من ${formatNumber(Number(target))} غ` : "لا يوجد هدف"}</small></article>)}
       </div>
       <section className="section-block">
         <div className="section-title"><div><p className="eyebrow">وجبات اليوم</p><h2>ما سجلته</h2></div><button className="text-action" onClick={() => setSheet("meal")}><Plus size={17} /> إضافة</button></div>
-        {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => setSheet("meal")} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon"><Utensils size={20} /></div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
+        {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى 🍽️" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => setSheet("meal")} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon emoji-icon">{mealEmoji(meal.category)}</div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
       </section>
       {pastMealDays.length > 0 && (
         <section className="section-block">

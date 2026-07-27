@@ -78,3 +78,116 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 @media (min-width: 760px) { .app-shell { padding-top: 24px; }.bottom-nav { right: 50%; left: auto; bottom: 20px; width: 510px; padding: 8px; border: 1px solid var(--line); border-radius: 20px; transform: translateX(50%); }.app-shell { padding-bottom: 120px; }.sheet { width: min(100%, 620px); margin: 0 auto; border-radius: 26px 26px 0 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* REST 2.0 — monochrome mobile-first interface */
+:root {
+  --ink: #f7f7f5;
+  --muted: #a6a6a1;
+  --subtle: #74746f;
+  --canvas: #080808;
+  --canvas-deep: #030303;
+  --surface: #111111;
+  --surface-raised: #181818;
+  --surface-soft: #222222;
+  --line: rgba(255,255,255,.12);
+  --mint: #f5f5f0;
+  --mint-strong: #ffffff;
+  --blue: #d5d5d1;
+  --sand: #c4c4bf;
+  --danger: #ff968e;
+  --shadow: 0 18px 52px rgba(0,0,0,.52);
+}
+
+body { letter-spacing: -.01em; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline-color: rgba(255,255,255,.5); }
+.app-shell { background: radial-gradient(circle at 16% -4%, rgba(255,255,255,.10), transparent 25%), var(--canvas); }
+.brand { gap: 7px; }
+.brand-mark { background: #f7f7f5; box-shadow: none; }
+.brand-mark span { background: #080808; }
+.brand-ar { color: #f7f7f5; }
+.app-top { margin-bottom: 3px; }
+.icon-button.surface { border-radius: 50%; background: #171717; }
+.daily-heading { padding: 26px 4px 18px; }
+.daily-date { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.daily-heading h1 { margin: 13px 0 8px; max-width: 330px; font-size: clamp(38px, 10vw, 50px); line-height: .98; letter-spacing: -.07em; }
+.daily-heading p { margin: 0; color: var(--muted); font-size: 14px; }
+.pulse-dot, .sync-badge span { background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
+.daily-focus { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; min-height: 151px; padding: 20px; border: 1px solid rgba(255,255,255,.17); border-radius: 28px; background: linear-gradient(140deg, #252525, #111 62%); box-shadow: var(--shadow); }
+.daily-focus > div:nth-child(2) { min-width: 0; }
+.daily-focus p, .daily-focus h2, .daily-focus span { margin: 0; }
+.daily-focus p { color: #c7c7c2; font-size: 12px; font-weight: 800; }
+.daily-focus h2 { margin-top: 4px; font-size: 21px; letter-spacing: -.04em; }
+.daily-focus span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.focus-number { align-self: start; color: #fff; font-family: Arial, sans-serif; font-size: 15px; font-weight: 800; letter-spacing: .1em; }
+.daily-focus .app-button { grid-column: 1 / -1; width: 100%; min-height: 48px; border-radius: 14px; }
+.daily-focus.active-hero { display: flex; min-height: auto; }
+.daily-focus.active-hero .hero-icon { color: #fff; background: rgba(255,255,255,.08); }
+.daily-focus.active-hero .round-action { color: #080808; background: #fff; }
+.today-pulse { margin-top: 27px; }
+.section-title { margin-bottom: 12px; }
+.section-title h2 { font-size: 21px; }
+.eyebrow { color: #bdbdb8; letter-spacing: .08em; }
+.status-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.status-card { min-height: 128px; padding: 15px; border-radius: 20px; background: #121212; }
+.status-card:nth-child(1) { grid-column: span 2; min-height: 100px; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-content: center; }
+.status-card:nth-child(1) svg { grid-row: span 2; margin: 0; }
+.status-card svg, .status-workout svg, .status-nutrition svg, .status-protein svg, .status-recovery svg { color: #fff; }
+.status-card strong { font-size: 15px; }
+.quick-actions { gap: 9px; }
+.quick-actions button { min-height: 94px; border-radius: 20px; background: #151515; }
+.quick-actions button:first-child { color: #050505; background: #f5f5f0; }
+.quick-actions button:first-child svg { color: #050505; }
+.quick-actions svg { color: #f6f6f2; }
+.quick-emoji { font-size: 21px; line-height: 20px; }
+.app-button.primary { color: #050505; background: #f5f5f0; }
+.app-button.primary:hover { background: #fff; }
+.app-button.secondary { background: #1c1c1c; }
+.app-button.ghost, .text-action { color: #f5f5f0; }
+.segment-control { margin-top: 4px; padding: 4px; background: #101010; border-radius: 16px; }
+.segment-control button.selected { color: #080808; background: #f5f5f0; }
+.active-strip { color: #f5f5f0; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.06); }
+.empty-state { padding: 34px 21px; border-style: solid; border-color: var(--line); border-radius: 24px; background: #111; }
+.empty-icon { color: #fff; background: #242424; }
+.equipment-card, .template-card, .meal-card, .session-card { border-radius: 20px; background: #121212; }
+.equipment-image, .template-symbol, .meal-icon, .session-symbol { color: #fff; background: #242424; }
+.emoji-icon { font-size: 22px; }
+.equipment-card span, .meal-card span, .session-card span { color: var(--subtle); }
+.start-mini { color: #080808; background: #f5f5f0; }
+.live-header { padding-top: 12px; }
+.live-metrics article { border-radius: 15px; background: #151515; }
+.live-metrics small { color: #e9e9e4; }
+.exercise-tabs button.selected { border-color: rgba(255,255,255,.55); color: #fff; background: rgba(255,255,255,.1); }
+.exercise-tabs button.add-exercise-tab { color: #080808; background: #f5f5f0; }
+.exercise-log-card { border-radius: 26px; background: #121212; }
+.exercise-log-title > svg, .composer-heading > svg { color: #fff; }
+.previous-performance { color: #deded8; background: #202020; }
+.previous-performance b { color: #fff; }
+.previous-performance.muted { background: #1b1b1b; }
+.set-history { display: grid; gap: 8px; margin: 15px 0; }
+.set-chip { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 9px; padding: 13px; border: 1px solid var(--line); border-radius: 15px; background: #191919; animation: set-in .22s ease; }
+.set-chip .set-index { color: var(--muted); font-size: 12px; }
+.set-chip b { color: #fff; font-size: 14px; }
+.set-chip b small, .set-chip > span:last-child { color: var(--subtle); font-size: 10px; font-weight: 600; }
+.no-sets { padding: 18px; border: 1px dashed var(--line); border-radius: 15px; background: #161616; }
+.quick-set-composer { border-color: rgba(255,255,255,.17); border-radius: 20px; background: #1a1a1a; }
+.composer-inputs input, .composer-inputs select, .set-kind-toggle { background: #0b0b0b; }
+.set-kind-toggle button.selected { color: #080808; background: #f5f5f0; }
+.nutrition-summary { border-color: rgba(255,255,255,.17); border-radius: 28px; background: linear-gradient(140deg, #242424, #101010); }
+.calorie-ring { background: conic-gradient(#f5f5f0 var(--progress), rgba(255,255,255,.10) 0); }
+.calorie-ring > div { background: #171717; }
+.macro-card { border-radius: 18px; background: #121212; }
+.macro-track .protein, .macro-track .carbs, .macro-track .fat { background: #f1f1ec; }
+.progress-overview article, .performance-strip article, .insight-card { background: #121212; }
+.progress-overview svg, .insight-card svg { color: #fff; }
+.recovery-card { border-color: var(--line); background: #171717; }
+.recovery-icon { color: #fff; background: #292929; }
+.bottom-nav { border-top-color: rgba(255,255,255,.1); background: rgba(7,7,7,.9); }
+.bottom-nav button.active { color: #fff; }
+.bottom-nav button.active svg { filter: drop-shadow(0 4px 8px rgba(255,255,255,.22)); }
+.sheet { background: #151515; }
+.sheet-handle { background: #6e6e69; }
+.form-stack input, .form-stack select, .check-row { background: #0b0b0b; }
+.form-stack label > span b, .set-target { color: #f5f5f0; }
+.set-target, .photo-upload > div, .photo-upload > img { border-color: rgba(255,255,255,.25); color: #fff; background: #1b1b1b; }
+.toast { border-color: rgba(255,255,255,.24); color: #fff; background: #202020; }
+.toast svg { color: #fff; }
