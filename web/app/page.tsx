@@ -12,7 +12,6 @@ import {
   ClipboardList,
   Dumbbell,
   Flame,
-  FolderPlus,
   HeartPulse,
   ImagePlus,
   LoaderCircle,
@@ -508,7 +507,8 @@ export default function Home() {
 
   const latestSetFor = (exerciseId: string) => {
     for (const session of data.sessions) {
-      const found = session.exercises.find((item) => item.exerciseId === exerciseId)?.sets.at(-1);
+      const sets = session.exercises.find((item) => item.exerciseId === exerciseId)?.sets ?? [];
+      const found = [...sets].reverse().find((set) => set.type === "working");
       if (found) return found;
     }
     return undefined;
@@ -533,10 +533,25 @@ export default function Home() {
 
   const finishWorkout = () => {
     if (!data.activeWorkout) return;
+    if (countLoggedSets(data.activeWorkout.exercises) === 0) {
+      if (!window.confirm("لم تسجّل أي مجموعة بعد. إنهاء التمرين بلا حفظ؟")) return;
+      persist({ ...data, activeWorkout: null });
+      setWorkoutView("templates");
+      setToast("تم إنهاء التمرين بلا حفظ");
+      return;
+    }
     const completed: WorkoutSession = { ...data.activeWorkout, completedAt: new Date().toISOString() };
     persist({ ...data, activeWorkout: null, sessions: [completed, ...data.sessions] });
     setWorkoutView("templates");
     setToast("تم حفظ التمرين محليًا");
+  };
+
+  const discardWorkout = () => {
+    if (!data.activeWorkout) return;
+    if (!window.confirm("تجاهل هذا التمرين؟ لن يُحفظ في سجلك.")) return;
+    persist({ ...data, activeWorkout: null });
+    setWorkoutView("templates");
+    setToast("تم تجاهل التمرين");
   };
 
   const deleteEquipment = (id: string) => {
@@ -945,6 +960,7 @@ export default function Home() {
           <div className="live-header">
             <button className="icon-button surface" onClick={() => setWorkoutView("templates")} aria-label="العودة لبدء التمرين"><ChevronLeft size={20} /></button>
             <div><p className="eyebrow">حصة جارية · {formatDuration(data.activeWorkout.startedAt)}</p><h1>{data.activeWorkout.name}</h1></div>
+            <button className="discard-button" onClick={discardWorkout}>تجاهل</button>
             <button className="finish-button" onClick={finishWorkout}>إنهاء</button>
           </div>
 
@@ -972,7 +988,24 @@ export default function Home() {
                     <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
                   ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
                   <div className="set-history" aria-label="مجموعات التمرين">
-                    {activeExercise.sets.length === 0 ? <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p> : activeExercise.sets.map((set, index) => <article className="set-chip" key={set.id}><span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${index + 1}`}</span><b dir="ltr">{set.weightKg} <small>كغ</small></b><b dir="ltr">× {set.reps}</b><span>RIR {set.rir ?? "—"}</span></article>)}
+                    {activeExercise.sets.length === 0 ? (
+                      <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p>
+                    ) : (
+                      (() => {
+                        let workingIndex = 0;
+                        return activeExercise.sets.map((set) => {
+                          if (set.type === "working") workingIndex += 1;
+                          return (
+                            <article className="set-chip" key={set.id}>
+                              <span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
+                              <b dir="ltr">{set.weightKg} <small>كغ</small></b>
+                              <b dir="ltr">× {set.reps}</b>
+                              <span>RIR {set.rir ?? "—"}</span>
+                            </article>
+                          );
+                        });
+                      })()
+                    )}
                   </div>
                   <form
                     className="quick-set-composer"
