@@ -493,6 +493,18 @@ export default function Home() {
     () => new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long" }).format(new Date()),
     [],
   );
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 5 }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index - 2);
+      return {
+        day: new Intl.DateTimeFormat("ar-SA", { weekday: "short" }).format(date),
+        date: new Intl.DateTimeFormat("ar-SA", { day: "numeric" }).format(date),
+        isToday: isToday(date.toISOString()),
+      };
+    });
+  }, []);
 
   const latestSetFor = (exerciseId: string) => {
     for (const session of data.sessions) {
@@ -785,9 +797,16 @@ export default function Home() {
   const todayContent = (
     <>
       <header className="daily-heading">
-        <div className="daily-date"><span className="pulse-dot" /> {todayLabel}</div>
-        <h1>تحرّك على إيقاعك.</h1>
-        <p>خطوة صغيرة الآن، وأثر كبير لاحقًا.</p>
+        <div className="daily-heading-row">
+          <div>
+            <div className="daily-date"><span className="pulse-dot" /> {todayLabel}</div>
+            <h1>يومك، <em>أبسط.</em></h1>
+          </div>
+          <div className="welcome-stat"><strong>{formatNumber(data.sessions.length)}</strong><span>حصصك</span></div>
+        </div>
+        <div className="week-rail" aria-label="أيام هذا الأسبوع">
+          {weekDays.map((day) => <div className={`week-day${day.isToday ? " is-today" : ""}`} key={`${day.day}-${day.date}`}><span>{day.day}</span><b>{day.date}</b></div>)}
+        </div>
       </header>
 
       {data.activeWorkout ? (
@@ -806,9 +825,9 @@ export default function Home() {
         <section className="daily-focus">
           <div className="focus-number">01</div>
           <div>
-            <p>أولوية اليوم</p>
-            <h2>جاهز لتمرينك؟</h2>
-            <span>ابدأ الآن، واختر التمارين داخل النادي.</span>
+            <p>الخطوة التالية</p>
+            <h2>سجّل أول مجموعة.</h2>
+            <span>افتح التمرين وأضف الوزن والتكرارات فورًا.</span>
           </div>
           <AppButton onClick={() => startWorkout()} icon={<ArrowLeft size={18} />}>ابدأ التمرين</AppButton>
         </section>
@@ -816,7 +835,7 @@ export default function Home() {
 
       <section className="section-block today-pulse">
         <div className="section-title">
-          <div><p className="eyebrow">لوحة اليوم</p><h2>كل شيء في لمحة</h2></div>
+          <div><p className="eyebrow">ملخص يومك</p><h2>أرقام تقودك</h2></div>
           <div className="sync-badge"><span /> {supabaseConfigured ? "متزامن" : "محفوظ على جهازك"}</div>
         </div>
         <div className="status-grid">
@@ -845,7 +864,7 @@ export default function Home() {
 
       <section className="section-block compact-section">
         <div className="section-title">
-          <div><p className="eyebrow">بضغطة واحدة</p><h2>إضافة سريعة</h2></div>
+          <div><p className="eyebrow">سجّل بسرعة</p><h2>إضافة سريعة</h2></div>
         </div>
         <div className="quick-actions">
           <button onClick={() => startWorkout()}><Dumbbell size={20} /><span>تمرين الآن</span></button>

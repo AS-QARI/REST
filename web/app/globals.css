@@ -108,8 +108,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .app-top { margin-bottom: 3px; }
 .icon-button.surface { border-radius: 50%; background: #171717; }
 .daily-heading { padding: 26px 4px 18px; }
+.daily-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .daily-date { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .daily-heading h1 { margin: 13px 0 8px; max-width: 330px; font-size: clamp(38px, 10vw, 50px); line-height: .98; letter-spacing: -.07em; }
+.daily-heading h1 em { color: #8f8f89; font-style: normal; }
+.welcome-stat { display: grid; justify-items: center; min-width: 56px; padding: 10px 8px 8px; border: 1px solid var(--line); border-radius: 17px; background: rgba(255,255,255,.045); }
+.welcome-stat strong { color: #fff; font-size: 18px; line-height: 1; }
+.welcome-stat span { margin-top: 5px; color: var(--subtle); font-size: 10px; font-weight: 700; }
+.week-rail { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin-top: 15px; }
+.week-day { display: grid; justify-items: center; gap: 4px; padding: 8px 3px; border-radius: 14px; color: var(--subtle); }
+.week-day span { font-size: 10px; font-weight: 700; }
+.week-day b { font-size: 13px; }
+.week-day.is-today { color: #080808; background: #f5f5f0; box-shadow: 0 7px 18px rgba(255,255,255,.12); }
 .daily-heading p { margin: 0; color: var(--muted); font-size: 14px; }
 .pulse-dot, .sync-badge span { background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
 .daily-focus { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; min-height: 151px; padding: 20px; border: 1px solid rgba(255,255,255,.17); border-radius: 28px; background: linear-gradient(140deg, #252525, #111 62%); box-shadow: var(--shadow); }
@@ -214,8 +224,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
   .bottom-nav svg { width: 18px; height: 18px; }
 
   .daily-heading { padding: 15px 4px 12px; }
+  .daily-heading-row { align-items: center; }
   .daily-heading h1 { margin: 8px 0 5px; font-size: 37px; }
-  .daily-heading p { font-size: 12px; }
+  .welcome-stat { min-width: 49px; padding: 8px 5px 6px; border-radius: 14px; }
+  .welcome-stat strong { font-size: 16px; }
+  .welcome-stat span { margin-top: 3px; font-size: 9px; }
+  .week-rail { gap: 5px; margin-top: 8px; }
+  .week-day { gap: 2px; padding: 5px 2px; border-radius: 11px; }
+  .week-day span { font-size: 9px; }
+  .week-day b { font-size: 12px; }
   .daily-focus { min-height: 109px; gap: 10px; padding: 15px; border-radius: 22px; }
   .daily-focus h2 { font-size: 18px; }
   .daily-focus span { margin-top: 3px; font-size: 11px; }
