@@ -1,6 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans_Arabic } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
+
+const arabicFont = Noto_Sans_Arabic({
+  subsets: ["arabic"],
+  display: "swap",
+  variable: "--font-arabic",
+  weight: ["400", "500", "600", "700"],
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -27,7 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#080808",
+  themeColor: "#000000",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -35,5 +43,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ar" dir="rtl"><body>{children}</body></html>;
+  return <html lang="ar" dir="rtl"><body className={arabicFont.variable}>{children}</body></html>;
 }
