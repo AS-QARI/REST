@@ -5,21 +5,24 @@ import {
   Activity,
   ArrowLeft,
   BarChart3,
+  Calendar,
   Camera,
   Check,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   CirclePlus,
   ClipboardList,
   Dumbbell,
   Eye,
   EyeOff,
-  Flame,
   History,
   ImagePlus,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   Minus,
+  Pencil,
   Plus,
   Search,
   Settings2,
@@ -27,11 +30,13 @@ import {
   Target,
   Trash2,
   TrendingUp,
+  Trophy,
   Utensils,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner, isSupabaseConfigured, loadOwnerSnapshot, saveOwnerSnapshot } from "./supabase";
 
@@ -141,6 +146,81 @@ const EMPTY_DATA: AppData = {
   nutritionTarget: { calories: 0, protein: 0, carbs: 0, fat: 0 },
 };
 
+function mergeLoopRepHistory(base: AppData): AppData {
+  const exerciseSeeds = new Map<string, { muscle: string }>();
+  LOOPREP_SESSIONS.forEach(([, exercises]) => exercises.forEach(([name, muscle]) => exerciseSeeds.set(name, { muscle })));
+
+  const equipment = [...base.equipment];
+  const exercises = [...base.exercises];
+  const exerciseIds = new Map<string, string>();
+
+  exerciseSeeds.forEach(({ muscle }, name) => {
+    const existingExercise = exercises.find((exercise) => exercise.name === name);
+    if (existingExercise) {
+      exerciseIds.set(name, existingExercise.id);
+      return;
+    }
+
+    let linkedEquipment = equipment.find((item) => item.name === name);
+    if (!linkedEquipment) {
+      linkedEquipment = {
+        id: `looprep-equipment:${name}`,
+        name,
+        primaryMuscle: muscle,
+        type: name.includes("كيبل") ? "كيبل" : "آلة",
+        notes: "مستورد من LoopRep",
+        createdAt: "2026-03-31T18:00:00+03:00",
+      };
+      equipment.push(linkedEquipment);
+    }
+
+    const exercise: Exercise = {
+      id: `looprep-exercise:${name}`,
+      name,
+      equipmentId: linkedEquipment.id,
+      primaryMuscle: muscle,
+      repMin: 6,
+      repMax: 12,
+    };
+    exercises.push(exercise);
+    exerciseIds.set(name, exercise.id);
+  });
+
+  const existingSessionIds = new Set(base.sessions.map((session) => session.id));
+  const importedSessions: WorkoutSession[] = LOOPREP_SESSIONS.flatMap(([date, sessionExercises]) => {
+    const sessionId = `looprep-session:${date}`;
+    if (existingSessionIds.has(sessionId)) return [];
+    const muscleNames = Array.from(new Set(sessionExercises.map(([, muscle]) => muscle)));
+    const startedAt = `${date}T18:00:00+03:00`;
+    const completedAt = `${date}T19:00:00+03:00`;
+    return [{
+      id: sessionId,
+      name: `${muscleNames.join(" + ")} Day`,
+      startedAt,
+      completedAt,
+      exercises: sessionExercises.map(([name, , sets, note], exerciseIndex) => ({
+        exerciseId: exerciseIds.get(name) ?? `looprep-exercise:${name}`,
+        notes: note,
+        sets: sets.map(([reps, weightKg], setIndex) => ({
+          id: `${sessionId}:exercise-${exerciseIndex}:set-${setIndex}`,
+          reps,
+          weightKg,
+          type: "working" as const,
+          completedAt: `${date}T18:${String(10 + exerciseIndex * 6 + setIndex).padStart(2, "0")}:00+03:00`,
+        })),
+      })),
+    }];
+  });
+
+  if (
+    equipment.length === base.equipment.length
+    && exercises.length === base.exercises.length
+    && importedSessions.length === 0
+  ) return base;
+
+  return { ...base, equipment, exercises, sessions: [...base.sessions, ...importedSessions] };
+}
+
 const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Arms", "Legs"] as const;
 type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 
@@ -203,6 +283,37 @@ function readNumericInput(value: string) {
 }
 
 const ARABIC_WITH_LATIN_NUMBERS = "ar-SA-u-ca-gregory-nu-latn";
+const ARABIC_WEEK_DAYS = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+const ARABIC_WEEK_INITIALS = ["ح", "ن", "ث", "ر", "خ", "ج", "س"];
+
+function calendarDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function shiftDate(value: Date, days: number) {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function lastSevenDays() {
+  const start = shiftDate(new Date(), -6);
+  return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
+}
+
+function shiftMonth(value: Date, months: number) {
+  const next = new Date(value.getFullYear(), value.getMonth() + months, 1, 12);
+  return next;
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
+    hour: "numeric",
+    minute: "2-digit",
+    numberingSystem: "latn",
+  }).format(new Date(value));
+}
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
@@ -241,6 +352,10 @@ function formatDuration(startedAt: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000));
   const hours = Math.floor(minutes / 60);
   return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}` : `${minutes} د`;
+}
+
+function daysSince(value: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
 }
 
 function sumMeal(meals: Meal[]) {
@@ -378,6 +493,7 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [editingEquipmentId, setEditingEquipmentId] = useState<string | null>(null);
   const [equipmentForm, setEquipmentForm] = useState({
     name: "",
     primaryMuscle: "",
@@ -388,6 +504,7 @@ export default function Home() {
   });
   const [templateName, setTemplateName] = useState("");
   const [templateExercises, setTemplateExercises] = useState<string[]>([]);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [mealForm, setMealForm] = useState({
     name: "",
     category: "فطور",
@@ -408,7 +525,10 @@ export default function Home() {
   const [equipmentSearch, setEquipmentSearch] = useState("");
   const [selectedExerciseId, setSelectedExerciseId] = useState("");
   const [setForm, setSetForm] = useState({ weightKg: "", reps: "", rir: "2", type: "working" as "working" | "warmup" });
-  const repsInputRef = useRef<HTMLInputElement>(null);
+  const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState(() => new Date());
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -426,8 +546,26 @@ export default function Home() {
           // Offline mode remains the source of truth until the next successful sync.
         }
       }
+      const merged = mergeLoopRepHistory(next);
+      const importedNewSessions = merged.sessions.length !== next.sessions.length;
+      if (importedNewSessions) {
+        next = merged;
+        await saveAppData(next);
+        if (isSupabaseConfigured()) {
+          try {
+            await saveOwnerSnapshot(next);
+          } catch {
+            // The local import remains available and will sync on the next successful save.
+          }
+        }
+      }
       if (!active) return;
       setData(next);
+      if (importedNewSessions) {
+        const latestImportedSession = [...next.sessions]
+          .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())[0];
+        if (latestImportedSession) setSelectedWorkoutDate(new Date(latestImportedSession.completedAt));
+      }
       setLoaded(true);
     })();
     if ("serviceWorker" in navigator) {
@@ -479,6 +617,55 @@ export default function Home() {
     () => [...data.sessions].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()),
     [data.sessions],
   );
+  const workoutWeekDays = useMemo(() => {
+    const start = new Date(selectedWorkoutDate);
+    start.setHours(12, 0, 0, 0);
+    start.setDate(start.getDate() - start.getDay());
+    return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
+  }, [selectedWorkoutDate]);
+  const selectedWorkoutDaySessions = useMemo(
+    () => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(selectedWorkoutDate)),
+    [selectedWorkoutDate, sortedSessions],
+  );
+  const workoutWeekLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
+    month: "long",
+    year: "numeric",
+    calendar: "gregory",
+    numberingSystem: "latn",
+  }).format(selectedWorkoutDate), [selectedWorkoutDate]);
+  const historyMonthCells = useMemo(() => {
+    const year = selectedHistoryDate.getFullYear();
+    const month = selectedHistoryDate.getMonth();
+    const leadingBlanks = new Date(year, month, 1, 12).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return [
+      ...Array.from({ length: leadingBlanks }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => new Date(year, month, index + 1, 12)),
+    ];
+  }, [selectedHistoryDate]);
+  const sessionDayKeys = useMemo(
+    () => new Set(data.sessions.map((session) => calendarDayKey(session.completedAt))),
+    [data.sessions],
+  );
+  const monthSessionCount = useMemo(() => data.sessions.filter((session) => {
+    const date = new Date(session.completedAt);
+    return date.getFullYear() === selectedHistoryDate.getFullYear() && date.getMonth() === selectedHistoryDate.getMonth();
+  }).length, [data.sessions, selectedHistoryDate]);
+  const selectedDaySessions = useMemo(
+    () => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(selectedHistoryDate)),
+    [selectedHistoryDate, sortedSessions],
+  );
+  const totalWorkingSets = useMemo(
+    () => data.sessions.reduce((count, session) => count + session.exercises.reduce(
+      (sets, exercise) => sets + exercise.sets.filter((set) => set.type === "working").length, 0), 0),
+    [data.sessions],
+  );
+  const historyMonthLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
+    month: "long",
+    year: "numeric",
+    calendar: "gregory",
+    numberingSystem: "latn",
+  }).format(selectedHistoryDate), [selectedHistoryDate]);
   const exerciseCatalog = useMemo(
     () => [
       ...data.exercises,
@@ -486,6 +673,25 @@ export default function Home() {
     ],
     [data.exercises],
   );
+  const personalRecords = useMemo(() => {
+    const records = new Map<string, { weightKg: number; reps: number; date: string }>();
+    data.sessions.forEach((session) => session.exercises.forEach((exercise) => exercise.sets.forEach((set) => {
+      if (set.type !== "working") return;
+      const current = records.get(exercise.exerciseId);
+      if (!current || set.weightKg > current.weightKg) {
+        records.set(exercise.exerciseId, { weightKg: set.weightKg, reps: set.reps, date: session.completedAt });
+      }
+    })));
+    return Array.from(records.entries())
+      .map(([exerciseId, record]) => ({
+        exerciseId,
+        ...record,
+        name: exerciseCatalog.find((exercise) => exercise.id === exerciseId)?.name ?? "",
+      }))
+      .filter((record) => record.name)
+      .sort((a, b) => b.weightKg - a.weightKg)
+      .slice(0, 5);
+  }, [data.sessions, exerciseCatalog]);
   const exercisesInSelectedGroup = useMemo(
     () => {
       const query = exerciseSearch.trim().toLocaleLowerCase("en");
@@ -506,8 +712,8 @@ export default function Home() {
   }, [data.equipment, equipmentMuscleGroup, equipmentSearch]);
   const exerciseDraftMeta = exerciseCatalog.find((exercise) => exercise.id === exerciseToAdd);
   const exerciseDraftEquipment = data.equipment.find((equipment) => equipment.id === exerciseDraftMeta?.equipmentId);
-  const exerciseHistory = useMemo(() => sortedSessions.flatMap((session) => {
-    const logged = session.exercises.find((exercise) => exercise.exerciseId === exerciseToAdd);
+  const getExerciseHistory = (exerciseId: string) => sortedSessions.flatMap((session) => {
+    const logged = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
     if (!logged?.sets.length) return [];
     const workingSets = logged.sets.filter((set) => set.type === "working");
     const sets = workingSets.length ? workingSets : logged.sets;
@@ -519,34 +725,26 @@ export default function Home() {
       repLabel: Math.min(...reps) === Math.max(...reps) ? String(reps[0]) : `${Math.min(...reps)}–${Math.max(...reps)}`,
       maxWeight: Math.max(...sets.map((set) => set.weightKg)),
     }];
-  }).slice(0, 4), [exerciseToAdd, sortedSessions]);
-  const exercisePersonalBest = useMemo(() => {
+  }).slice(0, 4);
+  const getExercisePersonalBest = (exerciseId: string) => {
     let best: SetLog | undefined;
     data.sessions.forEach((session) => session.exercises.forEach((exercise) => {
-      if (exercise.exerciseId !== exerciseToAdd) return;
+      if (exercise.exerciseId !== exerciseId) return;
       exercise.sets.forEach((set) => {
         if (set.type === "working" && (!best || set.weightKg > best.weightKg)) best = set;
       });
     }));
     return best;
-  }, [data.sessions, exerciseToAdd]);
+  };
+  const exerciseHistory = getExerciseHistory(exerciseToAdd);
+  const exercisePersonalBest = getExercisePersonalBest(exerciseToAdd);
+  const daysSinceLastTrained = exerciseHistory.length ? daysSince(exerciseHistory[0].date) : null;
   const activeSetCount = data.activeWorkout ? countLoggedSets(data.activeWorkout.exercises) : 0;
   const activeVolume = data.activeWorkout ? workoutVolume(data.activeWorkout.exercises) : 0;
   const totalLoggedVolume = useMemo(
     () => data.sessions.reduce((total, session) => total + workoutVolume(session.exercises), 0),
     [data.sessions],
   );
-  const heaviestWorkingSet = useMemo(() => {
-    let heaviest: SetLog | undefined;
-    data.sessions.forEach((session) => {
-      session.exercises.forEach((exercise) => {
-        exercise.sets.forEach((set) => {
-          if (set.type === "working" && (!heaviest || set.weightKg > heaviest.weightKg)) heaviest = set;
-        });
-      });
-    });
-    return heaviest;
-  }, [data.sessions]);
   const todayLabel = useMemo(
     () => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
       weekday: "long",
@@ -568,6 +766,21 @@ export default function Home() {
 
   const activeExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === selectedExerciseId);
   const activeExerciseMeta = exerciseCatalog.find((item) => item.id === selectedExerciseId);
+
+  const openCompactSetSheet = () => {
+    if (!activeExerciseMeta) return;
+    const previous = latestSetFor(activeExerciseMeta.id);
+    setSetForm({ weightKg: previous ? String(previous.weightKg) : "", reps: "", rir: "2", type: "working" });
+    setSheet("set");
+  };
+
+  const stepSetFormValue = (field: "weightKg" | "reps", amount: number) => {
+    setSetForm((current) => {
+      const minimum = field === "reps" ? 1 : 0;
+      const next = Math.max(minimum, (Number(current[field]) || 0) + amount);
+      return { ...current, [field]: String(next) };
+    });
+  };
 
   const startWorkout = (template?: Template) => {
     const activeWorkout: ActiveWorkout = {
@@ -642,6 +855,15 @@ export default function Home() {
     showToast("تم حذف الحصة", () => persist(previous));
   };
 
+  const removeExerciseFromWorkout = (exerciseId: string) => {
+    if (!data.activeWorkout) return;
+    const previous = data;
+    const remainingExercises = data.activeWorkout.exercises.filter((item) => item.exerciseId !== exerciseId);
+    persist({ ...data, activeWorkout: { ...data.activeWorkout, exercises: remainingExercises } });
+    if (selectedExerciseId === exerciseId) setSelectedExerciseId(remainingExercises[0]?.exerciseId ?? "");
+    showToast("تم إزالة التمرين من الحصة", () => persist(previous));
+  };
+
   const logout = () => {
     localStorage.removeItem("rest-session");
     setSignedIn(false);
@@ -681,9 +903,51 @@ export default function Home() {
     }
   };
 
+  const closeEquipmentSheet = () => {
+    setEditingEquipmentId(null);
+    setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photo: "" });
+    setSheet(null);
+  };
+
+  const openEquipmentSheet = (equipment?: Equipment) => {
+    if (equipment) {
+      setEditingEquipmentId(equipment.id);
+      setEquipmentForm({
+        name: equipment.name,
+        primaryMuscle: equipment.primaryMuscle,
+        type: equipment.type,
+        exerciseName: "",
+        notes: equipment.notes ?? "",
+        photo: equipment.photo ?? "",
+      });
+    } else {
+      setEditingEquipmentId(null);
+      setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photo: "" });
+    }
+    setSheet("equipment");
+  };
+
   const saveEquipment = (event: FormEvent) => {
     event.preventDefault();
     if (!equipmentForm.name.trim() || !equipmentForm.primaryMuscle) return;
+    if (editingEquipmentId) {
+      persist({
+        ...data,
+        equipment: data.equipment.map((item) => item.id === editingEquipmentId
+          ? {
+              ...item,
+              name: equipmentForm.name.trim(),
+              primaryMuscle: equipmentForm.primaryMuscle,
+              type: equipmentForm.type,
+              photo: equipmentForm.photo || undefined,
+              notes: equipmentForm.notes.trim() || undefined,
+            }
+          : item),
+      });
+      closeEquipmentSheet();
+      showToast("تم تحديث الجهاز");
+      return;
+    }
     const equipment: Equipment = {
       id: uid(),
       name: equipmentForm.name.trim(),
@@ -708,8 +972,7 @@ export default function Home() {
       equipment: [equipment, ...data.equipment],
       exercises: exercise ? [exercise, ...data.exercises] : data.exercises,
     });
-    setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photo: "" });
-    setSheet(null);
+    closeEquipmentSheet();
     showToast(exercise ? "تم حفظ الجهاز والتمرين" : "تم حفظ الجهاز محليًا");
   };
 
@@ -783,9 +1046,9 @@ export default function Home() {
     }
     const now = new Date().toISOString();
     const sets: SetLog[] = exerciseDraftSets.flatMap((draft) => {
-      const weightKg = Number(draft.weightKg);
-      const reps = Number(draft.reps);
-      if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg < 0 || reps < 1) return [];
+      const weightKg = readNumericInput(draft.weightKg);
+      const reps = readNumericInput(draft.reps);
+      if (weightKg === null || reps === null || weightKg < 0 || reps < 1) return [];
       return [{ id: uid(), weightKg, reps, rir: 2, type: "working", completedAt: now }];
     });
     if (!sets.length) {
@@ -814,9 +1077,9 @@ export default function Home() {
   const saveSet = (event: FormEvent) => {
     event.preventDefault();
     if (!data.activeWorkout || !activeExercise || !selectedExerciseId) return;
-    const weightKg = Number(setForm.weightKg);
-    const reps = Number(setForm.reps);
-    if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || reps < 1 || weightKg < 0) return;
+    const weightKg = readNumericInput(setForm.weightKg);
+    const reps = readNumericInput(setForm.reps);
+    if (weightKg === null || reps === null || reps < 1 || weightKg < 0) return;
     const set: SetLog = {
       id: uid(),
       weightKg,
@@ -837,6 +1100,32 @@ export default function Home() {
     showToast("حُفظت المجموعة على هذا الجهاز");
   };
 
+  const closeMealSheet = () => {
+    setEditingMealId(null);
+    setMealForm({ name: "", category: "فطور", calories: "", protein: "", carbs: "", fat: "" });
+    setMealError("");
+    setSheet(null);
+  };
+
+  const openMealSheet = (meal?: Meal) => {
+    if (meal) {
+      setEditingMealId(meal.id);
+      setMealForm({
+        name: meal.name,
+        category: meal.category,
+        calories: String(meal.calories),
+        protein: meal.protein ? String(meal.protein) : "",
+        carbs: meal.carbs ? String(meal.carbs) : "",
+        fat: meal.fat ? String(meal.fat) : "",
+      });
+    } else {
+      setEditingMealId(null);
+      setMealForm({ name: "", category: "فطور", calories: "", protein: "", carbs: "", fat: "" });
+    }
+    setMealError("");
+    setSheet("meal");
+  };
+
   const saveMeal = (event: FormEvent) => {
     event.preventDefault();
     const calories = readNumericInput(mealForm.calories);
@@ -851,6 +1140,17 @@ export default function Home() {
       setMealError("أدخل السعرات بأرقام صحيحة. يمكنك استخدام 100 أو ١٠٠.");
       return;
     }
+    if (editingMealId) {
+      persist({
+        ...data,
+        meals: data.meals.map((meal) => meal.id === editingMealId
+          ? { ...meal, name: mealForm.name.trim(), category: mealForm.category, calories, protein, carbs, fat }
+          : meal),
+      });
+      closeMealSheet();
+      showToast("تم تحديث الوجبة");
+      return;
+    }
     const meal: Meal = {
       id: uid(),
       name: mealForm.name.trim(),
@@ -862,19 +1162,17 @@ export default function Home() {
       createdAt: new Date().toISOString(),
     };
     persist({ ...data, meals: [meal, ...data.meals] });
-    setMealForm({ name: "", category: "فطور", calories: "", protein: "", carbs: "", fat: "" });
-    setMealError("");
-    setSheet(null);
+    closeMealSheet();
     showToast("تمت إضافة الوجبة");
   };
 
   const saveTarget = (event: FormEvent) => {
     event.preventDefault();
     const nutritionTarget: NutritionTarget = {
-      calories: Number(targetForm.calories) || 0,
-      protein: Number(targetForm.protein) || 0,
-      carbs: Number(targetForm.carbs) || 0,
-      fat: Number(targetForm.fat) || 0,
+      calories: readNumericInput(targetForm.calories) ?? 0,
+      protein: readNumericInput(targetForm.protein) ?? 0,
+      carbs: readNumericInput(targetForm.carbs) ?? 0,
+      fat: readNumericInput(targetForm.fat) ?? 0,
     };
     persist({ ...data, nutritionTarget });
     setSheet(null);
@@ -949,18 +1247,40 @@ export default function Home() {
     );
   }
 
+  const todayWeekDays = lastSevenDays();
+  const nutritionRemaining = data.nutritionTarget.calories - nutrition.calories;
+
   const todayContent = (
     <>
       <header className="daily-heading">
         <div className="daily-date"><span className="pulse-dot" /> {todayLabel}</div>
         <h1>اليوم، <em>بوضوح.</em></h1>
-        <p>تمرينك ووجباتك فقط — بدون أرقام لا تحتاجها الآن.</p>
+        <p>أسبوعك، تمرينك، ووجباتك — بنظرة وحدة.</p>
       </header>
+
+      <section className="today-week-strip" aria-label="أيام هذا الأسبوع">
+        {todayWeekDays.map((day) => {
+          const key = calendarDayKey(day);
+          const trained = sessionDayKeys.has(key);
+          const today = isToday(day.toISOString());
+          return (
+            <div className={`today-week-day${today ? " today" : ""}${trained ? " trained" : ""}`} key={key}>
+              <span>{ARABIC_WEEK_INITIALS[day.getDay()]}</span>
+              <b>{formatNumber(day.getDate())}</b>
+              <i />
+            </div>
+          );
+        })}
+      </section>
 
       {data.activeWorkout ? (
         <section className="today-card today-workout-card">
           <div className="today-card-icon"><Activity size={22} /></div>
-          <div><p>تمرين اليوم</p><h2>{data.activeWorkout.name}</h2><span>{formatDuration(data.activeWorkout.startedAt)} · {data.activeWorkout.exercises.length} تمارين</span></div>
+          <div>
+            <p>تمرين جارٍ</p>
+            <h2>{data.activeWorkout.name}</h2>
+            <span>{formatDuration(data.activeWorkout.startedAt)} · {formatNumber(activeSetCount)} مجموعات · {formatNumber(activeVolume)} كغ</span>
+          </div>
           <button className="round-action" onClick={() => { setTab("workout"); setWorkoutView("active"); }} aria-label="متابعة التمرين"><ChevronLeft size={22} /></button>
         </section>
       ) : (
@@ -973,18 +1293,18 @@ export default function Home() {
 
       <section className="today-card today-nutrition-card">
         <div className="today-card-icon"><Utensils size={22} /></div>
-        <div><p>وجبات اليوم</p><h2>{todayMeals.length ? `${formatNumber(todayMeals.length)} وجبات مسجلة` : "لم تسجّل وجبة بعد"}</h2><span>{formatNumber(nutrition.calories)} kcal · {formatNumber(nutrition.protein)} غ بروتين</span></div>
-        <button className="round-action" onClick={() => setSheet("meal")} aria-label="إضافة وجبة"><Plus size={21} /></button>
-      </section>
-
-      <section className="section-block compact-section today-actions">
-        <div className="section-title">
-          <div><p className="eyebrow">إجراءات اليوم</p><h2>سجّل الآن</h2></div>
+        <div>
+          <p>وجبات اليوم</p>
+          <h2>{todayMeals.length ? `${formatNumber(todayMeals.length)} وجبات مسجلة` : "لم تسجّل وجبة بعد"}</h2>
+          <span>
+            {data.nutritionTarget.calories
+              ? nutritionRemaining >= 0
+                ? `${formatNumber(nutritionRemaining)} kcal متبقية`
+                : `تجاوزت الهدف بـ${formatNumber(Math.abs(nutritionRemaining))} kcal`
+              : `${formatNumber(nutrition.calories)} kcal · ${formatNumber(nutrition.protein)} غ بروتين`}
+          </span>
         </div>
-        <div className="quick-actions">
-          <button onClick={() => startWorkout()}><Dumbbell size={20} /><span>تمرين الآن</span></button>
-          <button onClick={() => setSheet("meal")}><Utensils size={20} /><span>أضف وجبة</span></button>
-        </div>
+        <button className="round-action" onClick={() => openMealSheet()} aria-label="إضافة وجبة"><Plus size={21} /></button>
       </section>
     </>
   );
@@ -995,11 +1315,63 @@ export default function Home() {
         <div><p className="eyebrow">بلا جداول معقدة</p><h1>التمرين</h1></div>
         <button className="icon-button surface" onClick={() => setWorkoutView("equipment")} aria-label="إدارة المعدات"><Settings2 size={20} /></button>
       </header>
-      {data.activeWorkout ? (
-        <button className="active-strip" onClick={() => setWorkoutView("active")}>
-          <span className="pulse-dot" /> تمرين جارٍ: {data.activeWorkout.name}<ChevronLeft size={17} />
-        </button>
-      ) : null}
+
+      {workoutView !== "active" && (
+      <section className="workout-day-browser" aria-label="سجل التمرين حسب اليوم">
+        <div className="workout-day-browser-head">
+          <div><small>سجل الأيام</small><strong>{workoutWeekLabel}</strong></div>
+          <div className="workout-week-actions">
+            <button type="button" onClick={() => setSelectedWorkoutDate((date) => shiftDate(date, -7))} aria-label="الأسبوع السابق"><ChevronRight size={17} /></button>
+            <button type="button" className="workout-today-button" onClick={() => setSelectedWorkoutDate(new Date())}>اليوم</button>
+            <button type="button" onClick={() => setSelectedWorkoutDate((date) => shiftDate(date, 7))} aria-label="الأسبوع التالي"><ChevronLeft size={17} /></button>
+          </div>
+        </div>
+        <div className="workout-day-rail">
+          {workoutWeekDays.map((day) => {
+            const key = calendarDayKey(day);
+            const selected = key === calendarDayKey(selectedWorkoutDate);
+            const trained = sortedSessions.some((session) => calendarDayKey(session.completedAt) === key);
+            return (
+              <button type="button" key={key} className={`${selected ? "selected " : ""}${trained ? "trained" : ""}`} onClick={() => setSelectedWorkoutDate(day)} aria-pressed={selected} aria-label={formatDayHeading(day.toISOString())}>
+                <span>{ARABIC_WEEK_DAYS[day.getDay()]}</span>
+                <b>{day.getDate()}</b>
+                <i />
+              </button>
+            );
+          })}
+        </div>
+        <div className="workout-day-log">
+          <div className="workout-day-log-head">
+            <strong>{formatDayHeading(selectedWorkoutDate.toISOString())}</strong>
+            <span>{formatNumber(selectedWorkoutDaySessions.length)} حصص</span>
+          </div>
+          {selectedWorkoutDaySessions.length ? selectedWorkoutDaySessions.map((session) => (
+            <article className="workout-history-card" key={session.id}>
+              <div className="workout-history-title">
+                <div><h2>{session.name}</h2><p>{formatNumber(session.exercises.length)} تمارين · {formatNumber(countLoggedSets(session.exercises))} مجموعات</p></div>
+                <b>{formatNumber(workoutVolume(session.exercises))}<small> kg</small></b>
+              </div>
+              <div className="workout-history-exercises">
+                {session.exercises.map((logged) => {
+                  const exercise = exerciseCatalog.find((item) => item.id === logged.exerciseId);
+                  const workingSets = logged.sets.filter((set) => set.type === "working");
+                  const heaviest = workingSets.length ? Math.max(...workingSets.map((set) => set.weightKg)) : 0;
+                  return exercise ? (
+                    <div key={logged.exerciseId}>
+                      <span><Dumbbell size={14} />{exercise.name}</span>
+                      <b>{formatNumber(logged.sets.length)} × {formatNumber(heaviest)} kg</b>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </article>
+          )) : (
+            <div className="workout-day-empty"><Dumbbell size={18} /><span>لا يوجد تمرين مسجل في هذا اليوم</span></div>
+          )}
+        </div>
+      </section>
+      )}
+
       {workoutView !== "active" && (
         <div className="segment-control" role="tablist" aria-label="أقسام التمرين">
           <button className={workoutView === "templates" ? "selected" : ""} onClick={() => setWorkoutView("templates")}>ابدأ الآن</button>
@@ -1034,10 +1406,10 @@ export default function Home() {
         <section className="section-block">
           <div className="section-title">
             <div><p className="eyebrow">مكتبتك الشخصية</p><h2>الأجهزة</h2></div>
-            <button className="text-action" onClick={() => setSheet("equipment")}><Plus size={17} /> إضافة جهاز</button>
+            <button className="text-action" onClick={() => openEquipmentSheet()}><Plus size={17} /> إضافة جهاز</button>
           </div>
           {data.equipment.length === 0 ? (
-            <EmptyState icon={<Camera size={27} />} title="سجّل أول جهاز" body="صوّر الجهاز، اكتب اسمه، واختر العضلة الأساسية. البقية اختيارية." action={<AppButton onClick={() => setSheet("equipment")} icon={<Camera size={18} />}>إضافة جهاز</AppButton>} />
+            <EmptyState icon={<Camera size={27} />} title="سجّل أول جهاز" body="صوّر الجهاز، اكتب اسمه، واختر العضلة الأساسية. البقية اختيارية." action={<AppButton onClick={() => openEquipmentSheet()} icon={<Camera size={18} />}>إضافة جهاز</AppButton>} />
           ) : (
             <>
               <label className="library-search" dir="ltr">
@@ -1057,6 +1429,7 @@ export default function Home() {
                         {equipment.photo ? <img src={equipment.photo} alt={`صورة ${equipment.name}`} /> : <Dumbbell size={26} />}
                       </div>
                       <div><h2>{equipment.name}</h2><p dir="ltr">{equipment.primaryMuscle} · {equipment.type}</p><span>{data.exercises.filter((item) => item.equipmentId === equipment.id).length} تمارين مرتبطة</span></div>
+                      <button className="card-edit" onClick={() => openEquipmentSheet(equipment)} aria-label={`تعديل ${equipment.name}`}><Pencil size={17} /></button>
                       <button className="card-delete" onClick={() => deleteEquipment(equipment.id)} aria-label={`حذف ${equipment.name}`}><Trash2 size={18} /></button>
                     </article>
                   ))}
@@ -1089,16 +1462,28 @@ export default function Home() {
               <div className="exercise-tabs" aria-label="تمارين الحصة">
                 {data.activeWorkout.exercises.map((item) => {
                   const exercise = data.exercises.find((entry) => entry.id === item.exerciseId);
-                  return exercise ? <button key={item.exerciseId} className={selectedExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}>{exercise.name}</button> : null;
+                  return exercise ? <button key={item.exerciseId} className={selectedExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)}</b></button> : null;
                 })}
                 <button className="add-exercise-tab" onClick={() => setSheet("exercise")} aria-label="إضافة تمرين"><Plus size={17} /></button>
               </div>
               {activeExerciseMeta && activeExercise && (
                 <article className="exercise-log-card">
-                  <div className="exercise-log-title"><div><p className="eyebrow">{muscleGroupFor(activeExerciseMeta.primaryMuscle) ?? activeExerciseMeta.primaryMuscle} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}</p><h2>{activeExerciseMeta.name}</h2></div><Dumbbell size={22} /></div>
+                  <div className="exercise-log-title">
+                    <div><p className="eyebrow">{muscleGroupFor(activeExerciseMeta.primaryMuscle) ?? activeExerciseMeta.primaryMuscle} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}</p><h2>{activeExerciseMeta.name}</h2></div>
+                    <div className="exercise-log-actions">
+                      <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
+                      <Dumbbell size={22} />
+                    </div>
+                  </div>
                   {latestSetFor(activeExerciseMeta.id) ? (
                     <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
                   ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
+                  {(() => {
+                    const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
+                    return personalBest ? (
+                      <div className="previous-performance pb-row"><Sparkles size={17} /><span>أقوى أداء: <b>{formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</b></span></div>
+                    ) : null;
+                  })()}
                   {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
                   <div className="set-history" aria-label="مجموعات التمرين">
                     {activeExercise.sets.length === 0 ? (
@@ -1120,26 +1505,10 @@ export default function Home() {
                       })()
                     )}
                   </div>
-                  <form
-                    className="quick-set-composer"
-                    onSubmit={saveSet}
-                    onFocus={() => setSetForm((current) => {
-                      if (current.weightKg) return current;
-                      const previousWeight = latestSetFor(activeExerciseMeta.id)?.weightKg;
-                      return previousWeight === undefined ? current : { ...current, weightKg: String(previousWeight) };
-                    })}
-                  >
-                    <div className="composer-heading"><div><p className="eyebrow">سجلها بسرعة</p><h3>المجموعة التالية</h3></div><Check size={19} /></div>
-                    <div className="composer-inputs">
-                      <label><span>كغ</span><input value={setForm.weightKg} onChange={(event) => setSetForm({ ...setForm, weightKg: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); repsInputRef.current?.focus(); } }} type="number" inputMode="decimal" min="0" step="0.5" aria-label="الوزن بالكيلوغرام" /></label>
-                      <label><span>تكرار</span><input ref={repsInputRef} value={setForm.reps} onChange={(event) => setSetForm({ ...setForm, reps: event.target.value })} type="number" inputMode="numeric" min="1" aria-label="عدد التكرارات" /></label>
-                      <label><span>RIR</span><select value={setForm.rir} onChange={(event) => setSetForm({ ...setForm, rir: event.target.value })} aria-label="RIR">{[0, 1, 2, 3, 4, 5].map((rir) => <option value={rir} key={rir}>{rir}</option>)}</select></label>
-                    </div>
-                    <div className="composer-footer">
-                      <div className="set-kind-toggle" role="group" aria-label="نوع المجموعة"><button type="button" className={setForm.type === "working" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "working" })}>عمل</button><button type="button" className={setForm.type === "warmup" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "warmup" })}>إحماء</button></div>
-                      <AppButton type="submit" icon={<Plus size={18} />}>إضافة</AppButton>
-                    </div>
-                  </form>
+                  <div className="exercise-card-footer">
+                    <span>{formatNumber(activeExercise.sets.length)} جلسات مسجلة</span>
+                    <button type="button" onClick={openCompactSetSheet}><Plus size={16} /> إضافة جلسة</button>
+                  </div>
                 </article>
               )}
             </>
@@ -1173,8 +1542,8 @@ export default function Home() {
         ].map(([label, current, target, tone]) => <article className="macro-card" key={String(label)}><div><span>{label}</span><b>{formatNumber(Number(current))} غ</b></div><div className="macro-track"><span className={String(tone)} style={{ width: `${Number(target) ? Math.min(100, (Number(current) / Number(target)) * 100) : 0}%` }} /></div><small>{Number(target) ? `من ${formatNumber(Number(target))} غ` : "لا يوجد هدف"}</small></article>)}
       </div>
       <section className="section-block">
-        <div className="section-title"><div><p className="eyebrow">وجبات اليوم</p><h2>ما سجلته</h2></div><button className="text-action" onClick={() => setSheet("meal")}><Plus size={17} /> إضافة</button></div>
-        {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => setSheet("meal")} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon"><Utensils size={19} /></div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
+        <div className="section-title"><div><p className="eyebrow">وجبات اليوم</p><h2>ما سجلته</h2></div><button className="text-action" onClick={() => openMealSheet()}><Plus size={17} /> إضافة</button></div>
+        {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => openMealSheet()} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon"><Utensils size={19} /></div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
       </section>
       {pastMealDays.length > 0 && (
         <section className="section-block">
@@ -1188,6 +1557,7 @@ export default function Home() {
                     <div className="meal-icon"><Utensils size={20} /></div>
                     <div><p>{meal.category}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div>
                     <strong>{formatNumber(meal.calories)}<small> kcal</small></strong>
+                    <button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button>
                     <button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button>
                   </article>
                 ))}
@@ -1201,34 +1571,157 @@ export default function Home() {
 
   const progressContent = (
     <>
-      <header className="page-heading"><div><p className="eyebrow">التحسن الحقيقي</p><h1>التقدم</h1></div><BarChart3 className="header-icon" size={24} /></header>
-      <section className="progress-overview">
-        <article><Dumbbell size={20} /><span>الحصص المكتملة</span><strong>{formatNumber(data.sessions.length)}</strong></article>
-        <article><Activity size={20} /><span>مجموعات العمل</span><strong>{formatNumber(data.sessions.reduce((count, session) => count + session.exercises.reduce((sets, exercise) => sets + exercise.sets.filter((set) => set.type === "working").length, 0), 0))}</strong></article>
-        <article><Flame size={20} /><span>وجبات مسجلة</span><strong>{formatNumber(data.meals.length)}</strong></article>
+      <header className="page-heading"><div><p className="eyebrow">ارجع لأي يوم</p><h1>السجل</h1></div><BarChart3 className="header-icon" size={24} /></header>
+
+      <section className="month-calendar" aria-label="اختيار تاريخ من السجل">
+        <button
+          type="button"
+          className="calendar-trigger"
+          onClick={() => setCalendarExpanded((current) => !current)}
+          aria-expanded={calendarExpanded}
+        >
+          <span className="calendar-trigger-icon"><Calendar size={18} /></span>
+          <span className="calendar-trigger-label">
+            <strong>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</strong>
+            <small>{selectedDaySessions.length ? `${formatNumber(selectedDaySessions.length)} حصص` : "لا يوجد تمرين"}</small>
+          </span>
+          <ChevronDown className="calendar-trigger-chevron" size={19} />
+        </button>
+
+        {calendarExpanded && (
+          <div className="month-calendar-body">
+            <div className="month-calendar-head">
+              <button type="button" onClick={() => setSelectedHistoryDate((date) => shiftMonth(date, -1))} aria-label="الشهر السابق"><ChevronRight size={19} /></button>
+              <strong>{historyMonthLabel}</strong>
+              <button type="button" onClick={() => setSelectedHistoryDate((date) => shiftMonth(date, 1))} aria-label="الشهر التالي"><ChevronLeft size={19} /></button>
+              <button type="button" className="today-jump" onClick={() => { setSelectedHistoryDate(new Date()); setExpandedSessionId(null); setCalendarExpanded(false); }}>اليوم</button>
+            </div>
+
+            <div className="month-weekdays" aria-hidden="true">
+              {ARABIC_WEEK_INITIALS.map((initial, index) => <span key={ARABIC_WEEK_DAYS[index]}>{initial}</span>)}
+            </div>
+
+            <div className="month-grid" role="group" aria-label="أيام الشهر">
+              {historyMonthCells.map((day, index) => {
+                if (!day) return <span className="month-blank" key={`blank-${index}`} />;
+                const key = calendarDayKey(day);
+                const selected = key === calendarDayKey(selectedHistoryDate);
+                const today = isToday(day.toISOString());
+                const trained = sessionDayKeys.has(key);
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${trained ? " trained" : ""}`}
+                    onClick={() => { setSelectedHistoryDate(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
+                    aria-pressed={selected}
+                    aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}`}
+                  >
+                    <b>{formatNumber(day.getDate())}</b>
+                    <i />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="month-legend">
+              <span><i /> يوم تمرين</span>
+              <b>{formatNumber(monthSessionCount)} حصص هذا الشهر</b>
+            </div>
+          </div>
+        )}
       </section>
-      <section className="performance-strip" aria-label="أرقام الأداء">
-        <article><span>الحجم المسجل</span><strong>{formatNumber(totalLoggedVolume)} <small>كغ</small></strong></article>
-        <article><span>أثقل مجموعة عمل</span><strong>{heaviestWorkingSet ? `${formatNumber(heaviestWorkingSet.weightKg)} كغ` : "—"}</strong></article>
-      </section>
-      {sortedSessions.length > 0 && (
-        <section className="section-block">
-          <div className="section-title"><div><p className="eyebrow">حصصك المكتملة</p><h2>سجل التمارين</h2></div></div>
-          <div className="session-list">
-            {sortedSessions.map((session) => (
-              <article className="session-card" key={session.id}>
-                <div className="session-symbol"><Dumbbell size={20} /></div>
-                <div>
-                  <h2>{session.name}</h2>
-                  <p>{formatDayHeading(session.completedAt)}</p>
-                  <span>{formatNumber(session.exercises.length)} تمارين · {formatNumber(countLoggedSets(session.exercises))} مجموعات · {formatNumber(workoutVolume(session.exercises))} كغ</span>
+
+      <section className="day-log">
+        <div className="day-log-head">
+          <h2>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</h2>
+          {selectedDaySessions.length > 0 && <span>{formatNumber(selectedDaySessions.length)} حصص</span>}
+        </div>
+
+        {selectedDaySessions.length ? selectedDaySessions.map((session) => {
+          const expanded = expandedSessionId === session.id;
+          return (
+            <article className={`log-card${expanded ? " expanded" : ""}`} key={session.id}>
+              <button
+                type="button"
+                className="log-card-head"
+                onClick={() => setExpandedSessionId(expanded ? null : session.id)}
+                aria-expanded={expanded}
+              >
+                <span className="log-symbol"><Dumbbell size={19} /></span>
+                <span className="log-title">
+                  <strong>{session.name}</strong>
+                  <small>{formatTime(session.completedAt)} · {formatNumber(session.exercises.length)} تمارين · {formatNumber(countLoggedSets(session.exercises))} مجموعات</small>
+                </span>
+                <ChevronDown className="log-chevron" size={19} />
+              </button>
+
+              {expanded && (
+                <div className="log-body">
+                  {session.exercises.map((exercise) => {
+                    const meta = exerciseCatalog.find((item) => item.id === exercise.exerciseId);
+                    let workingIndex = 0;
+                    return (
+                      <div className="log-exercise" key={exercise.exerciseId}>
+                        <div className="log-exercise-head">
+                          <strong>{meta?.name ?? "تمرين محذوف"}</strong>
+                          <small>{formatNumber(exercise.sets.length)} مجموعات</small>
+                        </div>
+                        <div className="log-sets">
+                          {exercise.sets.map((set) => {
+                            if (set.type === "working") workingIndex += 1;
+                            return (
+                              <span className={`log-set${set.type === "warmup" ? " warmup" : ""}`} key={set.id}>
+                                <i>{set.type === "warmup" ? "إحماء" : formatNumber(workingIndex)}</i>
+                                <b dir="ltr">{formatNumber(set.weightKg)} kg × {formatNumber(set.reps)}</b>
+                              </span>
+                            );
+                          })}
+                        </div>
+                        {exercise.notes && <p className="log-note">{exercise.notes}</p>}
+                      </div>
+                    );
+                  })}
+                  <div className="log-card-footer">
+                    <span>حجم العمل <b dir="ltr">{formatNumber(workoutVolume(session.exercises))} kg</b></span>
+                    <button type="button" onClick={() => deleteSession(session.id)}><Trash2 size={15} /> حذف الحصة</button>
+                  </div>
                 </div>
-                <button className="card-delete" onClick={() => deleteSession(session.id)} aria-label={`حذف حصة ${session.name}`}><Trash2 size={18} /></button>
+              )}
+            </article>
+          );
+        }) : (
+          <div className="day-log-empty">
+            <Dumbbell size={22} />
+            <strong>لا يوجد تمرين في هذا اليوم</strong>
+            <span>الأيام المعلّمة بنقطة فيها حصص مسجلة.</span>
+          </div>
+        )}
+      </section>
+
+      {personalRecords.length > 0 && (
+        <section className="section-block">
+          <div className="section-title"><div><p className="eyebrow">أفضل ما رفعت</p><h2>أرقامك القياسية</h2></div></div>
+          <div className="record-list">
+            {personalRecords.map((record, index) => (
+              <article className="record-row" key={record.exerciseId}>
+                <span className={`record-rank${index === 0 ? " top" : ""}`}>{index === 0 ? <Trophy size={15} /> : formatNumber(index + 1)}</span>
+                <div><strong>{record.name}</strong><small>{formatDate(record.date)}</small></div>
+                <b dir="ltr">{formatNumber(record.weightKg)} kg × {formatNumber(record.reps)}</b>
               </article>
             ))}
           </div>
         </section>
       )}
+
+      <section className="section-block">
+        <div className="section-title"><div><p className="eyebrow">منذ البداية</p><h2>الإجمالي</h2></div></div>
+        <div className="totals-grid">
+          <article><Dumbbell size={17} /><span>الحصص</span><strong>{formatNumber(data.sessions.length)}</strong></article>
+          <article><Activity size={17} /><span>مجموعات العمل</span><strong>{formatNumber(totalWorkingSets)}</strong></article>
+          <article><TrendingUp size={17} /><span>الحجم الكلي</span><strong dir="ltr">{formatNumber(totalLoggedVolume)}<small>kg</small></strong></article>
+        </div>
+      </section>
     </>
   );
 
@@ -1270,7 +1763,7 @@ export default function Home() {
       )}
 
       {sheet === "equipment" && (
-        <Sheet title="إضافة جهاز" onClose={() => setSheet(null)}>
+        <Sheet title={editingEquipmentId ? "تعديل الجهاز" : "إضافة جهاز"} onClose={closeEquipmentSheet}>
           <form className="form-stack sheet-form equipment-form" onSubmit={saveEquipment}>
             <label className="photo-upload equipment-photo-first">
               <span>صورة الجهاز <em>اختياري</em></span>
@@ -1285,9 +1778,11 @@ export default function Home() {
               </div>
             </fieldset>
             <label><span>نوع الجهاز</span><select value={equipmentForm.type} onChange={(event) => setEquipmentForm({ ...equipmentForm, type: event.target.value })}>{EQUIPMENT_TYPES.map((type) => <option value={type} key={type}>{type}</option>)}</select></label>
-            <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input dir="ltr" value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder="e.g. Seated Chest Press" /></label>
+            {!editingEquipmentId && (
+              <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input dir="ltr" value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder="e.g. Seated Chest Press" /></label>
+            )}
             <label><span>ملاحظات <em>اختياري</em></span><textarea value={equipmentForm.notes} onChange={(event) => setEquipmentForm({ ...equipmentForm, notes: event.target.value })} placeholder="رقم المقعد، إعداد الجهاز، أو أي تلميح مهم" rows={3} /></label>
-            <AppButton type="submit" disabled={!equipmentForm.name.trim() || !equipmentForm.primaryMuscle} icon={<Check size={18} />}>حفظ الجهاز</AppButton>
+            <AppButton type="submit" disabled={!equipmentForm.name.trim() || !equipmentForm.primaryMuscle} icon={<Check size={18} />}>{editingEquipmentId ? "حفظ التعديلات" : "حفظ الجهاز"}</AppButton>
           </form>
         </Sheet>
       )}
@@ -1323,11 +1818,11 @@ export default function Home() {
 
                 <div className="exercise-insights">
                   <article><span>أقوى مستوى</span>{exercisePersonalBest ? <><b>{formatNumber(exercisePersonalBest.reps)} عدة</b><strong dir="ltr">{formatNumber(exercisePersonalBest.weightKg)} kg</strong></> : <small>لا يوجد سجل</small>}</article>
-                  <article><span>آخر التمارين</span><b>{formatNumber(exerciseHistory.length)} أيام</b><History size={18} /></article>
+                  <article><span>آخر مرة</span>{daysSinceLastTrained !== null ? <b>{daysSinceLastTrained === 0 ? "اليوم" : `منذ ${formatNumber(daysSinceLastTrained)} يوم`}</b> : <small>لا يوجد سجل</small>}<History size={18} /></article>
                 </div>
 
                 <section className="exercise-history-card" aria-label="آخر أداء للتمرين">
-                  <div className="history-title"><span><History size={16} /> آخر التمارين</span><small>{exerciseHistory.length ? `${formatNumber(exerciseHistory.length)} أيام` : "أول مرة"}</small></div>
+                  <div className="history-title"><span><History size={16} /> آخر التمارين</span><small>{exerciseHistory.length ? `${formatNumber(exerciseHistory.length)} حصص` : "أول مرة"}</small></div>
                   {exerciseHistory.length ? (
                     <div className="history-table">
                       <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
@@ -1341,8 +1836,8 @@ export default function Home() {
                   {exerciseDraftSets.map((draft, index) => (
                     <div className="draft-set-row" key={draft.id}>
                       <div className="draft-index"><b>{formatNumber(index + 1)}</b>{exerciseDraftSets.length > 1 && <button type="button" onClick={() => removeExerciseDraftSet(draft.id)} aria-label={`حذف الجلسة ${index + 1}`}><X size={14} /></button>}</div>
-                      <div className="stepper-control" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", -1)} aria-label="إنقاص التكرارات"><Minus size={15} /></button><input value={draft.reps} onChange={(event) => updateExerciseDraftSet(draft.id, "reps", event.target.value)} type="number" inputMode="numeric" min="1" aria-label={`تكرارات الجلسة ${index + 1}`} /><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", 1)} aria-label="زيادة التكرارات"><Plus size={15} /></button></div>
-                      <div className="stepper-control weight-stepper" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={15} /></button><input value={draft.weightKg} onChange={(event) => updateExerciseDraftSet(draft.id, "weightKg", event.target.value)} type="number" inputMode="decimal" min="0" step="0.5" aria-label={`وزن الجلسة ${index + 1}`} /><span>kg</span><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={15} /></button></div>
+                      <div className="stepper-control" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", -1)} aria-label="إنقاص التكرارات"><Minus size={15} /></button><input value={draft.reps} onChange={(event) => updateExerciseDraftSet(draft.id, "reps", event.target.value)} type="text" inputMode="numeric" aria-label={`تكرارات الجلسة ${index + 1}`} /><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", 1)} aria-label="زيادة التكرارات"><Plus size={15} /></button></div>
+                      <div className="stepper-control weight-stepper" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={15} /></button><input value={draft.weightKg} onChange={(event) => updateExerciseDraftSet(draft.id, "weightKg", event.target.value)} type="text" inputMode="decimal" aria-label={`وزن الجلسة ${index + 1}`} /><span>kg</span><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={15} /></button></div>
                     </div>
                   ))}
                   <button type="button" className="add-draft-set" onClick={addExerciseDraftSet}><Plus size={16} /> إضافة جلسة</button>
@@ -1361,11 +1856,103 @@ export default function Home() {
         </Sheet>
       )}
 
-      {sheet === "set" && <Sheet title="إضافة مجموعة" onClose={() => setSheet(null)}><form className="form-stack sheet-form set-form" onSubmit={saveSet}><div className="set-target"><Dumbbell size={18} /><span>{activeExerciseMeta?.name}</span></div><div className="number-grid"><label><span>الوزن</span><div className="number-with-unit"><input value={setForm.weightKg} onChange={(event) => setSetForm({ ...setForm, weightKg: event.target.value })} type="number" inputMode="decimal" min="0" step="0.5" autoFocus /><b>كغ</b></div></label><label><span>التكرارات</span><input value={setForm.reps} onChange={(event) => setSetForm({ ...setForm, reps: event.target.value })} type="number" inputMode="numeric" min="1" /></label></div><div className="number-grid"><label><span>RIR</span><select value={setForm.rir} onChange={(event) => setSetForm({ ...setForm, rir: event.target.value })}>{[0, 1, 2, 3, 4, 5].map((rir) => <option value={rir} key={rir}>{rir}</option>)}</select></label><label><span>النوع</span><select value={setForm.type} onChange={(event) => setSetForm({ ...setForm, type: event.target.value as "working" | "warmup" })}><option value="working">عمل</option><option value="warmup">إحماء</option></select></label></div><AppButton type="submit" icon={<Check size={18} />}>حفظ المجموعة</AppButton></form></Sheet>}
+      {sheet === "set" && (
+        <Sheet title="إضافة جلسة" onClose={() => setSheet(null)}>
+          <form className="set-session-sheet" onSubmit={saveSet}>
+            <div className="set-exercise-banner">
+              <span className="set-exercise-icon"><Dumbbell size={19} /></span>
+              <div><small>التمرين الحالي</small><strong>{activeExerciseMeta?.name}</strong></div>
+              <b>{activeExerciseMeta ? muscleGroupFor(activeExerciseMeta.primaryMuscle) : ""}</b>
+            </div>
 
-      {sheet === "meal" && <Sheet title="إضافة وجبة" onClose={() => { setMealError(""); setSheet(null); }}><form className="form-stack sheet-form" onSubmit={saveMeal}><p className="form-hint">اكتب السعرات بأي أرقام: 100 أو ١٠٠. الماكروز اختيارية.</p><label><span>اسم الوجبة <b>*</b></span><input value={mealForm.name} onChange={(event) => { setMealError(""); setMealForm({ ...mealForm, name: event.target.value }); }} placeholder="مثال: دجاج وأرز" autoFocus /></label><label><span>التصنيف</span><select value={mealForm.category} onChange={(event) => setMealForm({ ...mealForm, category: event.target.value })}>{MEAL_CATEGORIES.map((category) => <option value={category} key={category}>{category}</option>)}</select></label><label><span>السعرات <b>*</b></span><div className="number-with-unit"><input value={mealForm.calories} onChange={(event) => { setMealError(""); setMealForm({ ...mealForm, calories: event.target.value }); }} inputMode="decimal" min="0" /><b>kcal</b></div></label><div className="number-grid three"><label><span>بروتين</span><input value={mealForm.protein} onChange={(event) => setMealForm({ ...mealForm, protein: event.target.value })} inputMode="decimal" min="0" /></label><label><span>كربوهيدرات</span><input value={mealForm.carbs} onChange={(event) => setMealForm({ ...mealForm, carbs: event.target.value })} inputMode="decimal" min="0" /></label><label><span>دهون</span><input value={mealForm.fat} onChange={(event) => setMealForm({ ...mealForm, fat: event.target.value })} inputMode="decimal" min="0" /></label></div>{mealError && <p className="form-error" role="alert">{mealError}</p>}<AppButton type="submit" icon={<Check size={18} />}>حفظ الوجبة</AppButton></form></Sheet>}
+            <div className="set-metrics-grid">
+              <label className="set-metric-card">
+                <span>الوزن <small>kg</small></span>
+                <div className="set-sheet-stepper" dir="ltr">
+                  <button type="button" onClick={() => stepSetFormValue("weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={17} /></button>
+                  <input value={setForm.weightKg} onChange={(event) => setSetForm({ ...setForm, weightKg: event.target.value })} type="text" inputMode="decimal" placeholder="0" autoFocus aria-label="الوزن بالكيلوغرام" />
+                  <button type="button" onClick={() => stepSetFormValue("weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={17} /></button>
+                </div>
+              </label>
+              <label className="set-metric-card">
+                <span>التكرارات <small>reps</small></span>
+                <div className="set-sheet-stepper" dir="ltr">
+                  <button type="button" onClick={() => stepSetFormValue("reps", -1)} aria-label="إنقاص التكرارات"><Minus size={17} /></button>
+                  <input value={setForm.reps} onChange={(event) => setSetForm({ ...setForm, reps: event.target.value })} type="text" inputMode="numeric" placeholder="8" aria-label="عدد التكرارات" />
+                  <button type="button" onClick={() => stepSetFormValue("reps", 1)} aria-label="زيادة التكرارات"><Plus size={17} /></button>
+                </div>
+              </label>
+            </div>
 
-      {sheet === "target" && <Sheet title="أهدافك اليومية" onClose={() => setSheet(null)}><form className="form-stack sheet-form" onSubmit={saveTarget}><p className="form-hint">اضبط الأرقام التي تناسبك مباشرة. لا يفرض رست عليك حاسبة أو هدفًا.</p><label><span>السعرات</span><div className="number-with-unit"><input value={targetForm.calories} onChange={(event) => setTargetForm({ ...targetForm, calories: event.target.value })} type="number" inputMode="numeric" min="0" autoFocus /><b>kcal</b></div></label><div className="number-grid three"><label><span>البروتين</span><input value={targetForm.protein} onChange={(event) => setTargetForm({ ...targetForm, protein: event.target.value })} type="number" inputMode="decimal" min="0" /></label><label><span>الكربوهيدرات</span><input value={targetForm.carbs} onChange={(event) => setTargetForm({ ...targetForm, carbs: event.target.value })} type="number" inputMode="decimal" min="0" /></label><label><span>الدهون</span><input value={targetForm.fat} onChange={(event) => setTargetForm({ ...targetForm, fat: event.target.value })} type="number" inputMode="decimal" min="0" /></label></div><AppButton type="submit" icon={<Check size={18} />}>حفظ الأهداف</AppButton></form></Sheet>}
+            <fieldset className="set-choice-block">
+              <legend>نوع الجلسة</legend>
+              <div className="set-type-segment" role="group" aria-label="نوع الجلسة">
+                <button type="button" className={setForm.type === "working" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "working" })}>مجموعة عمل</button>
+                <button type="button" className={setForm.type === "warmup" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "warmup" })}>إحماء</button>
+              </div>
+            </fieldset>
+
+            <fieldset className="set-choice-block rir-choice">
+              <legend><span>RIR</span><small>التكرارات المتبقية</small></legend>
+              <div className="rir-chip-row" role="group" aria-label="التكرارات المتبقية">
+                {[0, 1, 2, 3, 4, 5].map((rir) => <button type="button" key={rir} className={setForm.rir === String(rir) ? "selected" : ""} onClick={() => setSetForm({ ...setForm, rir: String(rir) })} aria-pressed={setForm.rir === String(rir)}>{rir}</button>)}
+              </div>
+            </fieldset>
+
+            <button type="submit" className="set-save-button"><Check size={19} /> حفظ الجلسة</button>
+          </form>
+        </Sheet>
+      )}
+
+      {sheet === "meal" && (
+        <Sheet title={editingMealId ? "تعديل الوجبة" : "إضافة وجبة"} onClose={closeMealSheet}>
+          <form className="meal-entry-sheet" onSubmit={saveMeal}>
+            <label className="meal-name-field">
+              <span>اسم الوجبة</span>
+              <input value={mealForm.name} onChange={(event) => { setMealError(""); setMealForm({ ...mealForm, name: event.target.value }); }} placeholder="وش أكلت؟" autoFocus aria-label="اسم الوجبة" />
+            </label>
+
+            <fieldset className="meal-category-block">
+              <legend>وقت الوجبة</legend>
+              <div className="meal-category-rail" role="group" aria-label="تصنيف الوجبة">
+                {MEAL_CATEGORIES.map((category) => <button type="button" key={category} className={mealForm.category === category ? "selected" : ""} onClick={() => setMealForm({ ...mealForm, category })} aria-pressed={mealForm.category === category}>{category}</button>)}
+              </div>
+            </fieldset>
+
+            <label className="calorie-entry-card">
+              <span><small>الطاقة</small>السعرات</span>
+              <div dir="ltr"><input value={mealForm.calories} onChange={(event) => { setMealError(""); setMealForm({ ...mealForm, calories: event.target.value }); }} inputMode="decimal" min="0" placeholder="0" aria-label="السعرات" /><b>kcal</b></div>
+            </label>
+
+            <div className="macro-entry-grid" aria-label="الماكروز الاختيارية">
+              <label className="protein"><span>بروتين</span><div dir="ltr"><input value={mealForm.protein} onChange={(event) => setMealForm({ ...mealForm, protein: event.target.value })} inputMode="decimal" min="0" placeholder="0" aria-label="البروتين" /><b>g</b></div></label>
+              <label className="carbs"><span>كربوهيدرات</span><div dir="ltr"><input value={mealForm.carbs} onChange={(event) => setMealForm({ ...mealForm, carbs: event.target.value })} inputMode="decimal" min="0" placeholder="0" aria-label="الكربوهيدرات" /><b>g</b></div></label>
+              <label className="fat"><span>دهون</span><div dir="ltr"><input value={mealForm.fat} onChange={(event) => setMealForm({ ...mealForm, fat: event.target.value })} inputMode="decimal" min="0" placeholder="0" aria-label="الدهون" /><b>g</b></div></label>
+            </div>
+            <p className="meal-optional-note">الماكروز اختيارية — سجّل المتوفر فقط.</p>
+            {mealError && <p className="form-error meal-form-error" role="alert">{mealError}</p>}
+            <button type="submit" className="meal-save-button"><Check size={19} /> {editingMealId ? "حفظ التعديلات" : "حفظ الوجبة"}</button>
+          </form>
+        </Sheet>
+      )}
+
+      {sheet === "target" && (
+        <Sheet title="أهدافك اليومية" onClose={() => setSheet(null)}>
+          <form className="target-entry-sheet" onSubmit={saveTarget}>
+            <p className="target-intro">أرقام مرجعية لليوم فقط، ويمكنك تعديلها في أي وقت.</p>
+            <label className="target-calorie-card">
+              <span><small>الهدف الرئيسي</small>السعرات اليومية</span>
+              <div dir="ltr"><input value={targetForm.calories} onChange={(event) => setTargetForm({ ...targetForm, calories: event.target.value })} type="text" inputMode="numeric" placeholder="0" autoFocus aria-label="هدف السعرات" /><b>kcal</b></div>
+            </label>
+            <div className="target-macro-grid">
+              <label className="protein"><span>بروتين</span><div dir="ltr"><input value={targetForm.protein} onChange={(event) => setTargetForm({ ...targetForm, protein: event.target.value })} type="text" inputMode="decimal" placeholder="0" aria-label="هدف البروتين" /><b>g</b></div></label>
+              <label className="carbs"><span>كربوهيدرات</span><div dir="ltr"><input value={targetForm.carbs} onChange={(event) => setTargetForm({ ...targetForm, carbs: event.target.value })} type="text" inputMode="decimal" placeholder="0" aria-label="هدف الكربوهيدرات" /><b>g</b></div></label>
+              <label className="fat"><span>دهون</span><div dir="ltr"><input value={targetForm.fat} onChange={(event) => setTargetForm({ ...targetForm, fat: event.target.value })} type="text" inputMode="decimal" placeholder="0" aria-label="هدف الدهون" /><b>g</b></div></label>
+            </div>
+            <button type="submit" className="target-save-button"><Check size={19} /> حفظ الأهداف</button>
+          </form>
+        </Sheet>
+      )}
     </main>
   );
 }
