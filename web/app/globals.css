@@ -291,8 +291,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .start-mini { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 66px; padding: 0 10px; color: var(--accent-ink); background: var(--accent); font-size: 12px; font-weight: 800; border-radius: var(--r-sm); height: 37px; margin-inline-start: auto; }
 .secondary-cta { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding: 0 4px; color: var(--muted); font-size: 12px; }
 .secondary-cta .app-button { min-height: 42px; padding: 0 13px; border-radius: var(--r-sm); }
-.equipment-image { display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 62px; height: 62px; border-radius: var(--r-md); color: var(--accent); background: var(--surface-soft); }
+.equipment-image { position: relative; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 62px; height: 62px; border-radius: var(--r-md); color: var(--accent); background: var(--surface-soft); }
 .equipment-image img { width: 100%; height: 100%; object-fit: cover; }
+.equipment-photo-count { position: absolute; right: 3px; bottom: 3px; min-width: 17px; padding: 0 4px; border-radius: var(--r-pill); color: var(--accent-ink); background: var(--accent); font-size: 10px; font-weight: 800; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--surface); }
 .meal-card strong { margin-inline-start: auto; font-size: 16px; white-space: nowrap; }
 .meal-card strong small { display: block; color: var(--subtle); font-size: 10px; font-weight: 500; text-align: end; }
 
@@ -514,9 +515,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 19px; }
 .sheet-header h2 { margin: 0; font-size: 21px; }
 .sheet-form { padding-bottom: 4px; }
-.photo-upload > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.photo-upload > div, .photo-upload > img { display: grid; place-items: center; width: 100%; min-height: 120px; overflow: hidden; border: 1px dashed rgba(31,79,191,.42); border-radius: var(--r-md); color: var(--accent); background: var(--accent-wash); object-fit: cover; }
-.photo-upload p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.photo-upload-field { display: grid; gap: 8px; color: var(--ink-dim); font-size: 14px; font-weight: 700; }
+.photo-thumb-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.photo-thumb { position: relative; width: 84px; height: 84px; overflow: hidden; border-radius: var(--r-md); background: var(--surface-soft); }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-thumb-remove { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
+.photo-thumb-remove:active { transform: scale(.92); }
+.photo-thumb-add { position: relative; display: grid; place-items: center; gap: 4px; width: 84px; height: 84px; overflow: hidden; border: 1px dashed var(--line-strong); border-radius: var(--r-md); color: var(--accent); background: var(--accent-wash); text-align: center; }
+.photo-thumb-add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.photo-thumb-add p { margin: 0; color: var(--accent); font-size: 10px; font-weight: 700; }
 .exercise-picker { display: grid; gap: 7px; padding: 0; border: 0; }
 .exercise-picker legend { padding: 0; color: var(--ink-dim); font-size: 14px; font-weight: 700; }
 .check-row { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 10px; min-height: 49px; padding: 0 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--canvas-deep); }
@@ -710,8 +717,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .form-stack { gap: 9px; }
   .form-stack label { gap: 4px; font-size: 12px; }
   .form-stack input, .form-stack select { min-height: 40px; border-radius: 11px; }
-  .photo-upload > div, .photo-upload > img { min-height: 58px; }
-  .photo-upload p { margin: 3px 0 0; font-size: 10px; }
+  .photo-thumb, .photo-thumb-add { width: 68px; height: 68px; }
   .check-row { min-height: 38px; padding: 0 10px; }
   .exercise-picker { gap: 4px; }
   .form-hint { padding: 8px; font-size: 10px; }
@@ -826,9 +832,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .muscle-fieldset { display: grid; gap: 9px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .muscle-fieldset legend { padding: 0; color: var(--ink-dim); font-size: 14px; font-weight: 700; }
 .muscle-fieldset legend b { color: var(--accent); }
-.equipment-photo-first > div, .equipment-photo-first > img { min-height: 108px; }
-.equipment-photo-first > img { max-height: 180px; }
-
 .exercise-add-form { display: grid; gap: 16px; padding-bottom: 4px; }
 .exercise-add-form .library-search { margin-bottom: 0; }
 .exercise-add-form .filter-rail { margin-bottom: 0; }

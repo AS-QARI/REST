@@ -17,7 +17,6 @@ import {
   Eye,
   EyeOff,
   History,
-  ImagePlus,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -57,7 +56,7 @@ type Equipment = {
   name: string;
   primaryMuscle: string;
   type: string;
-  photo?: string;
+  photos?: string[];
   notes?: string;
   createdAt: string;
 };
@@ -508,7 +507,7 @@ export default function Home() {
     type: "آلة",
     exerciseName: "",
     notes: "",
-    photo: "",
+    photos: [] as string[],
   });
   const [templateName, setTemplateName] = useState("");
   const [templateExercises, setTemplateExercises] = useState<string[]>([]);
@@ -906,7 +905,7 @@ export default function Home() {
 
   const closeEquipmentSheet = () => {
     setEditingEquipmentId(null);
-    setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photo: "" });
+    setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photos: [] });
     setSheet(null);
   };
 
@@ -919,11 +918,11 @@ export default function Home() {
         type: equipment.type,
         exerciseName: "",
         notes: equipment.notes ?? "",
-        photo: equipment.photo ?? "",
+        photos: equipment.photos ?? [],
       });
     } else {
       setEditingEquipmentId(null);
-      setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photo: "" });
+      setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photos: [] });
     }
     setSheet("equipment");
   };
@@ -940,7 +939,7 @@ export default function Home() {
               name: equipmentForm.name.trim(),
               primaryMuscle: equipmentForm.primaryMuscle,
               type: equipmentForm.type,
-              photo: equipmentForm.photo || undefined,
+              photos: equipmentForm.photos.length ? equipmentForm.photos : undefined,
               notes: equipmentForm.notes.trim() || undefined,
             }
           : item),
@@ -954,7 +953,7 @@ export default function Home() {
       name: equipmentForm.name.trim(),
       primaryMuscle: equipmentForm.primaryMuscle,
       type: equipmentForm.type,
-      photo: equipmentForm.photo || undefined,
+      photos: equipmentForm.photos.length ? equipmentForm.photos : undefined,
       notes: equipmentForm.notes.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
@@ -1427,7 +1426,8 @@ export default function Home() {
                   {filteredEquipment.map((equipment) => (
                     <article className="equipment-card" key={equipment.id}>
                       <div className="equipment-image">
-                        {equipment.photo ? <img src={equipment.photo} alt={`صورة ${equipment.name}`} /> : <Dumbbell size={26} />}
+                        {equipment.photos?.length ? <img src={equipment.photos[0]} alt={`صورة ${equipment.name}`} /> : <Dumbbell size={26} />}
+                        {equipment.photos && equipment.photos.length > 1 && <span className="equipment-photo-count">{equipment.photos.length}</span>}
                       </div>
                       <div><h2>{equipment.name}</h2><p dir="ltr">{equipment.primaryMuscle} · {equipment.type}</p><span>{countLabel(data.exercises.filter((item) => item.equipmentId === equipment.id).length, "تمرين واحد مرتبط", "تمارين مرتبطة")}</span></div>
                       <button className="card-edit" onClick={() => openEquipmentSheet(equipment)} aria-label={`تعديل ${equipment.name}`}><Pencil size={17} /></button>
@@ -1766,11 +1766,41 @@ export default function Home() {
       {sheet === "equipment" && (
         <Sheet title={editingEquipmentId ? "تعديل الجهاز" : "إضافة جهاز"} onClose={closeEquipmentSheet}>
           <form className="form-stack sheet-form equipment-form" onSubmit={saveEquipment}>
-            <label className="photo-upload equipment-photo-first">
-              <span>صورة الجهاز <em>اختياري</em></span>
-              <input type="file" accept="image/*" capture="environment" onChange={async (event) => { const file = event.target.files?.[0]; if (file) setEquipmentForm({ ...equipmentForm, photo: await readFileAsDataUrl(file) }); }} />
-              {equipmentForm.photo ? <img src={equipmentForm.photo} alt="معاينة صورة الجهاز" /> : <div><Camera size={25} /><p>التقط صورة أو اختر من الجهاز</p></div>}
-            </label>
+            <div className="photo-upload-field">
+              <span>صور الجهاز <em>اختياري</em></span>
+              <div className="photo-thumb-row" dir="ltr">
+                {equipmentForm.photos.map((photo, index) => (
+                  <div className="photo-thumb" key={index}>
+                    <img src={photo} alt={`صورة ${index + 1} من الجهاز`} />
+                    <button
+                      type="button"
+                      className="photo-thumb-remove"
+                      onClick={() => setEquipmentForm((current) => ({ ...current, photos: current.photos.filter((_, i) => i !== index) }))}
+                      aria-label={`حذف الصورة ${index + 1}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                <label className="photo-thumb-add">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        const dataUrl = await readFileAsDataUrl(file);
+                        setEquipmentForm((current) => ({ ...current, photos: [...current.photos, dataUrl] }));
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                  <Camera size={22} />
+                  <p>{equipmentForm.photos.length ? "إضافة" : "التقط صورة"}</p>
+                </label>
+              </div>
+            </div>
             <label><span>اسم الجهاز <b>*</b></span><input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} placeholder="مثال: Chest Press Machine" autoFocus /></label>
             <fieldset className="muscle-fieldset">
               <legend>المجموعة العضلية <b>*</b></legend>
@@ -1806,13 +1836,13 @@ export default function Home() {
                 <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية" dir="ltr">{(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>{group === "All" ? "الكل" : group}</button>)}</div>
                 <div className="exercise-choice-heading"><span>{selectedMuscleGroup === "All" ? "كل التمارين" : `${selectedMuscleGroup} Exercises`}</span><small>{formatNumber(exercisesInSelectedGroup.length)} تمارين</small></div>
                 {exercisesInSelectedGroup.length === 0 ? <div className="library-empty"><Search size={20} /><span>لا توجد تمارين مطابقة</span></div> : (
-                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photo ? <img src={equipment.photo} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupFor(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} reps</small></span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
+                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupFor(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} reps</small></span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
                 )}
               </>
             ) : (
               <div className="exercise-logger">
                 <div className="selected-exercise-strip">
-                  <span className="selected-equipment-thumb">{exerciseDraftEquipment?.photo ? <img src={exerciseDraftEquipment.photo} alt="" /> : <Dumbbell size={19} />}</span>
+                  <span className="selected-equipment-thumb">{exerciseDraftEquipment?.photos?.length ? <img src={exerciseDraftEquipment.photos[0]} alt="" /> : <Dumbbell size={19} />}</span>
                   <div><strong>{exerciseDraftMeta.name}</strong><small>{muscleGroupFor(exerciseDraftMeta.primaryMuscle)}</small></div>
                   <button type="button" onClick={resetExerciseLogger} aria-label="إلغاء اختيار التمرين"><X size={17} /></button>
                 </div>
