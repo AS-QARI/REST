@@ -307,7 +307,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .live-header { display: flex; align-items: center; gap: 12px; padding: 12px 0 19px; }
 .live-header > div { min-width: 0; }
 .live-header h1 { overflow: hidden; margin: 4px 0 0; font-size: 24px; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
-.finish-button { margin-inline-start: auto; padding: 9px 12px; border-radius: var(--r-sm); color: var(--danger); background: rgba(242,148,140,.12); font-size: 13px; font-weight: 800; }
+.finish-button { margin-inline-start: auto; padding: 9px 14px; border-radius: var(--r-sm); color: var(--accent-ink); background: var(--accent); font-size: 13px; font-weight: 800; }
 .discard-button { padding: 9px 12px; border-radius: var(--r-sm); color: var(--subtle); background: transparent; border: 1px solid var(--line); font-size: 13px; font-weight: 700; }
 .live-metrics { display: grid; grid-template-columns: .8fr .9fr 1.3fr; gap: 7px; margin: 0 0 17px; }
 .live-metrics article { padding: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(255,255,255,.025); }

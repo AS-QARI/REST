@@ -799,25 +799,25 @@ export default function Home() {
 
   const finishWorkout = () => {
     if (!data.activeWorkout) return;
+    const previous = data;
     if (countLoggedSets(data.activeWorkout.exercises) === 0) {
-      if (!window.confirm("لم تسجّل أي مجموعة بعد. إنهاء التمرين بلا حفظ؟")) return;
       persist({ ...data, activeWorkout: null });
       setWorkoutView("templates");
-      showToast("تم إنهاء التمرين بلا حفظ");
+      showToast("تم إنهاء التمرين بلا حفظ", () => persist(previous));
       return;
     }
     const completed: WorkoutSession = { ...data.activeWorkout, completedAt: new Date().toISOString() };
     persist({ ...data, activeWorkout: null, sessions: [completed, ...data.sessions] });
     setWorkoutView("templates");
-    showToast("تم حفظ التمرين محليًا");
+    showToast("تم حفظ التمرين محليًا", () => persist(previous));
   };
 
   const discardWorkout = () => {
     if (!data.activeWorkout) return;
-    if (!window.confirm("تجاهل هذا التمرين؟ لن يُحفظ في سجلك.")) return;
+    const previous = data;
     persist({ ...data, activeWorkout: null });
     setWorkoutView("templates");
-    showToast("تم تجاهل التمرين");
+    showToast("تم تجاهل التمرين", () => persist(previous));
   };
 
   const deleteEquipment = (id: string) => {
