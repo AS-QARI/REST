@@ -1,46 +1,23 @@
-# REST API with Supabase
+# REST — رست
 
-REST API مع Supabase للإدارة والتخزين.
+رفيقك الشخصي للتمرين والتغذية والتقدم. تطبيق PWA بالعربي (RTL)، لمالك واحد، يعمل دون إنترنت أول بأول (IndexedDB) مع مزامنة اختيارية إلى Supabase.
 
-## خطوات الإعداد
+**التطبيق الفعلي موجود بمجلد [`web/`](web/)** — هذا الملف يخص الريبو ككل فقط.
 
-### 1. تثبيت المكتبات
+## تشغيل التطبيق محليًا
+
 ```bash
-npm install
+cd web
+pnpm install
+pnpm run dev
 ```
 
-### 2. إعداد متغيرات البيئة
-انسخ `.env.example` إلى `.env`:
-```bash
-cp .env.example .env
-```
+يفتح على `http://localhost:3000`.
 
-### 3. إضافة بيانات Supabase
-اذهب إلى لوحة Supabase وأضف:
-- **SUPABASE_URL**: رابط المشروع من Settings > API
-- **SUPABASE_ANON_KEY**: المفتاح العام من Settings > API
+## ربط Supabase (اختياري)
 
-ملف `.env`:
-```
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_ANON_KEY=eyJhbGc...
-PORT=3000
-```
+بدون Supabase، التطبيق يشتغل كامل محليًا على جهازك. لتفعيل المزامنة السحابية اتبع الخطوات بـ [`web/docs/SUPABASE_SETUP.md`](web/docs/SUPABASE_SETUP.md).
 
-### 4. تشغيل السيرفر
-```bash
-npm start
-```
+## ملاحظة
 
-أو للتطوير مع تحديث تلقائي:
-```bash
-npm run dev
-```
-
-### 5. اختبار الاتصال
-افتح في المتصفح:
-```
-http://localhost:3000/api/health
-```
-
-يجب أن تحصل على استجابة نجاح إذا تم الاتصال بـ Supabase بنجاح ✅
+مجلد الريبو الجذر (`server.js`, `config/`) بقايا سكرببت Express/Supabase قديم غير مستخدم من التطبيق الفعلي — تجاهله.
