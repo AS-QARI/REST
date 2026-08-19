@@ -42,7 +42,7 @@ import { authenticateOwner, isSupabaseConfigured, loadOwnerSnapshot, saveOwnerSn
 export const dynamic = "force-static";
 
 type Tab = "today" | "workout" | "nutrition" | "progress";
-type WorkoutView = "templates" | "equipment" | "active";
+type WorkoutView = "templates" | "equipment";
 type Sheet =
   | "equipment"
   | "template"
@@ -360,12 +360,6 @@ function formatDayHeading(value: string) {
   }).format(new Date(value));
 }
 
-function formatDuration(startedAt: string) {
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000));
-  const hours = Math.floor(minutes / 60);
-  return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}` : `${minutes} د`;
-}
-
 function daysSince(value: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
 }
@@ -393,6 +387,32 @@ function workoutVolume(exercises: WorkoutExercise[]) {
       .reduce((setTotal, set) => setTotal + set.weightKg * set.reps, 0),
     0,
   );
+}
+
+// There is no explicit "finish workout" step — an in-progress draft becomes a real,
+// visible session the moment it has a logged set, keyed by its own id so repeated
+// edits update the same entry instead of duplicating it.
+function reconcileActiveWorkoutIntoSessions(current: AppData): AppData {
+  const active = current.activeWorkout;
+  if (!active) return current;
+  const withoutActive = current.sessions.filter((session) => session.id !== active.id);
+  if (countLoggedSets(active.exercises) === 0) {
+    return { ...current, sessions: withoutActive };
+  }
+  const existing = current.sessions.find((session) => session.id === active.id);
+  const completed: WorkoutSession = { ...active, completedAt: existing?.completedAt ?? active.startedAt };
+  return { ...current, sessions: [completed, ...withoutActive] };
+}
+
+// Reconciles first (so switching days never silently drops an unsaved draft), then
+// loads whichever session already exists for the target day back into activeWorkout.
+function hydrateActiveWorkoutForDay(current: AppData, day: Date): AppData {
+  const reconciled = reconcileActiveWorkoutIntoSessions(current);
+  const existing = reconciled.sessions.find((session) => calendarDayKey(session.completedAt) === calendarDayKey(day));
+  const activeWorkout: ActiveWorkout | null = existing
+    ? { id: existing.id, name: existing.name, startedAt: existing.startedAt, exercises: existing.exercises }
+    : null;
+  return { ...reconciled, activeWorkout };
 }
 
 async function readFileAsDataUrl(file: File) {
@@ -601,7 +621,9 @@ export default function Home() {
         }
       }
       if (!active) return;
-      setData(next);
+      const hydrated = hydrateActiveWorkoutForDay(next, selectedWorkoutDate);
+      setData(hydrated);
+      void saveAppData(hydrated);
       if (importedCount > 0) {
         showToast(`تم استيراد ${formatNumber(importedCount)} حصة من سجلك السابق`);
       }
@@ -611,6 +633,8 @@ export default function Home() {
       navigator.serviceWorker.register("/REST/sw.js", { scope: "/REST/" }).catch(() => undefined);
     }
     return () => { active = false; };
+    // Runs once on mount; selectedWorkoutDate's initial value (today) is what we want here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -623,7 +647,8 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [tab, workoutView]);
 
-  const persist = (next: AppData) => {
+  const persist = (raw: AppData) => {
+    const next = reconcileActiveWorkoutIntoSessions(raw);
     setData(next);
     void saveAppData(next);
     if (supabaseConfigured) {
@@ -632,6 +657,16 @@ export default function Home() {
         .then(() => setSyncStatus("synced"))
         .catch(() => setSyncStatus("error"));
     }
+  };
+
+  // The workout editor always reflects whichever day is selected in the day-browser:
+  // reconcile any dangling draft first (so nothing is lost), then load that day's
+  // existing session (if any) back into activeWorkout for continued editing.
+  const selectWorkoutDate = (day: Date) => {
+    const hydrated = hydrateActiveWorkoutForDay(data, day);
+    setSelectedWorkoutDate(day);
+    setSelectedExerciseId(hydrated.activeWorkout?.exercises[0]?.exerciseId ?? "");
+    persist(hydrated);
   };
 
   const todayMeals = useMemo(() => data.meals.filter((meal) => isToday(meal.createdAt)), [data.meals]);
@@ -660,6 +695,10 @@ export default function Home() {
   const selectedWorkoutDaySessions = useMemo(
     () => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(selectedWorkoutDate)),
     [selectedWorkoutDate, sortedSessions],
+  );
+  const otherSessionsForDay = useMemo(
+    () => selectedWorkoutDaySessions.filter((session) => session.id !== data.activeWorkout?.id),
+    [selectedWorkoutDaySessions, data.activeWorkout],
   );
   const workoutWeekLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
     month: "long",
@@ -817,41 +856,23 @@ export default function Home() {
   };
 
   const startWorkout = (template?: Template) => {
-    const activeWorkout: ActiveWorkout = {
+    const base: ActiveWorkout = data.activeWorkout ?? {
       id: uid(),
       name: template?.name || "تمرين جديد",
-      startedAt: new Date().toISOString(),
-      exercises: (template?.exerciseIds || []).map((exerciseId) => ({ exerciseId, sets: [] })),
+      startedAt: dateOnSelectedDay(selectedWorkoutDate),
+      exercises: [],
+    };
+    const newExerciseIds = (template?.exerciseIds || []).filter(
+      (exerciseId) => !base.exercises.some((item) => item.exerciseId === exerciseId),
+    );
+    const activeWorkout: ActiveWorkout = {
+      ...base,
+      exercises: [...base.exercises, ...newExerciseIds.map((exerciseId) => ({ exerciseId, sets: [] }))],
     };
     persist({ ...data, activeWorkout });
     setSelectedExerciseId(activeWorkout.exercises[0]?.exerciseId || "");
     setTab("workout");
-    setWorkoutView("active");
     if (activeWorkout.exercises.length === 0) setSheet("exercise");
-    showToast(template ? `بدأ تمرين ${template.name}` : "بدأ التمرين الفارغ");
-  };
-
-  const finishWorkout = () => {
-    if (!data.activeWorkout) return;
-    const previous = data;
-    if (countLoggedSets(data.activeWorkout.exercises) === 0) {
-      persist({ ...data, activeWorkout: null });
-      setWorkoutView("templates");
-      showToast("تم إنهاء التمرين بلا حفظ", () => persist(previous));
-      return;
-    }
-    const completed: WorkoutSession = { ...data.activeWorkout, completedAt: dateOnSelectedDay(selectedWorkoutDate) };
-    persist({ ...data, activeWorkout: null, sessions: [completed, ...data.sessions] });
-    setWorkoutView("templates");
-    showToast("تم حفظ التمرين محليًا", () => persist(previous));
-  };
-
-  const discardWorkout = () => {
-    if (!data.activeWorkout) return;
-    const previous = data;
-    persist({ ...data, activeWorkout: null });
-    setWorkoutView("templates");
-    showToast("تم تجاهل التمرين", () => persist(previous));
   };
 
   const deleteEquipment = (id: string) => {
@@ -1312,11 +1333,11 @@ export default function Home() {
         <section className="today-card today-workout-card">
           <div className="today-card-icon"><Activity size={22} /></div>
           <div>
-            <p>تمرين جارٍ</p>
+            <p>تمرين اليوم</p>
             <h2>{data.activeWorkout.name}</h2>
-            <span>{formatDuration(data.activeWorkout.startedAt)} · {countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
+            <span>{countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
           </div>
-          <button className="round-action" onClick={() => { setTab("workout"); setWorkoutView("active"); }} aria-label="متابعة التمرين"><ChevronLeft size={22} /></button>
+          <button className="round-action" onClick={() => setTab("workout")} aria-label="متابعة التمرين"><ChevronLeft size={22} /></button>
         </section>
       ) : (
         <section className="today-card today-workout-card">
@@ -1348,17 +1369,23 @@ export default function Home() {
     <>
       <header className="page-heading">
         <div><p className="eyebrow">بلا جداول معقدة</p><h1>التمرين</h1></div>
-        <button className="icon-button surface" onClick={() => setWorkoutView("equipment")} aria-label="إدارة المعدات"><Settings2 size={20} /></button>
+        <button
+          className="icon-button surface"
+          onClick={() => setWorkoutView(workoutView === "equipment" ? "templates" : "equipment")}
+          aria-label={workoutView === "equipment" ? "العودة للتمرين" : "إدارة المعدات"}
+        >
+          {workoutView === "equipment" ? <ChevronLeft size={20} /> : <Settings2 size={20} />}
+        </button>
       </header>
 
-      {workoutView !== "active" && (
+      {workoutView === "templates" && (
       <section className="workout-day-browser" aria-label="سجل التمرين حسب اليوم">
         <div className="workout-day-browser-head">
           <div><small>سجل الأيام</small><strong>{workoutWeekLabel}</strong></div>
           <div className="workout-week-actions">
-            <button type="button" onClick={() => setSelectedWorkoutDate((date) => shiftDate(date, -7))} aria-label="الأسبوع السابق"><ChevronRight size={17} /></button>
-            <button type="button" className="workout-today-button" onClick={() => setSelectedWorkoutDate(new Date())}>اليوم</button>
-            <button type="button" onClick={() => setSelectedWorkoutDate((date) => shiftDate(date, 7))} aria-label="الأسبوع التالي"><ChevronLeft size={17} /></button>
+            <button type="button" onClick={() => selectWorkoutDate(shiftDate(selectedWorkoutDate, -7))} aria-label="الأسبوع السابق"><ChevronRight size={17} /></button>
+            <button type="button" className="workout-today-button" onClick={() => selectWorkoutDate(new Date())}>اليوم</button>
+            <button type="button" onClick={() => selectWorkoutDate(shiftDate(selectedWorkoutDate, 7))} aria-label="الأسبوع التالي"><ChevronLeft size={17} /></button>
           </div>
         </div>
         <div className="workout-day-rail">
@@ -1367,7 +1394,7 @@ export default function Home() {
             const selected = key === calendarDayKey(selectedWorkoutDate);
             const trained = sortedSessions.some((session) => calendarDayKey(session.completedAt) === key);
             return (
-              <button type="button" key={key} className={`${selected ? "selected " : ""}${trained ? "trained" : ""}`} onClick={() => setSelectedWorkoutDate(day)} aria-pressed={selected} aria-label={formatDayHeading(day.toISOString())}>
+              <button type="button" key={key} className={`${selected ? "selected " : ""}${trained ? "trained" : ""}`} onClick={() => selectWorkoutDate(day)} aria-pressed={selected} aria-label={formatDayHeading(day.toISOString())}>
                 <span>{ARABIC_WEEK_DAYS[day.getDay()]}</span>
                 <b>{day.getDate()}</b>
                 <i />
@@ -1378,9 +1405,12 @@ export default function Home() {
         <div className="workout-day-log">
           <div className="workout-day-log-head">
             <strong>{formatDayHeading(selectedWorkoutDate.toISOString())}</strong>
-            <span>{countLabel(selectedWorkoutDaySessions.length, "حصة واحدة", "حصص")}</span>
+            {data.activeWorkout
+              ? <span>{countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
+              : <span>{countLabel(selectedWorkoutDaySessions.length, "حصة واحدة", "حصص")}</span>}
           </div>
-          {selectedWorkoutDaySessions.length ? selectedWorkoutDaySessions.map((session) => (
+
+          {otherSessionsForDay.map((session) => (
             <article className="workout-history-card" key={session.id}>
               <div className="workout-history-title">
                 <div><h2>{session.name}</h2><p>{countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</p></div>
@@ -1400,40 +1430,93 @@ export default function Home() {
                 })}
               </div>
             </article>
-          )) : (
-            <div className="workout-day-empty"><Dumbbell size={18} /><span>لا يوجد تمرين مسجل في هذا اليوم</span></div>
-          )}
+          ))}
+
+          {data.activeWorkout ? (
+            data.activeWorkout.exercises.length === 0 ? (
+              <EmptyState icon={<CirclePlus size={27} />} title="ابدأ بإضافة تمرين" body="اختر قسم العضلة، ثم اختر التمرين وابدأ تسجيل مجموعاتك." action={<AppButton onClick={() => setSheet("exercise")} icon={<Plus size={18} />}>إضافة تمرين</AppButton>} />
+            ) : (
+              <>
+                <div className="exercise-tabs" aria-label="تمارين الحصة">
+                  {data.activeWorkout.exercises.map((item) => {
+                    const exercise = exerciseCatalog.find((entry) => entry.id === item.exerciseId);
+                    return exercise ? <button key={item.exerciseId} className={selectedExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)}</b></button> : null;
+                  })}
+                  <button className="add-exercise-tab" onClick={() => setSheet("exercise")} aria-label="إضافة تمرين"><Plus size={17} /></button>
+                </div>
+                {activeExerciseMeta && activeExercise && (
+                  <article className="exercise-log-card">
+                    <div className="exercise-log-title">
+                      <div><p className="eyebrow">{muscleGroupFor(activeExerciseMeta.primaryMuscle) ?? activeExerciseMeta.primaryMuscle} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}</p><h2>{activeExerciseMeta.name}</h2></div>
+                      <div className="exercise-log-actions">
+                        <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
+                        <Dumbbell size={22} />
+                      </div>
+                    </div>
+                    {latestSetFor(activeExerciseMeta.id) ? (
+                      <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
+                    ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
+                    {(() => {
+                      const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
+                      return personalBest ? (
+                        <div className="previous-performance pb-row"><Sparkles size={17} /><span>أقوى أداء: <b>{formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</b></span></div>
+                      ) : null;
+                    })()}
+                    {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
+                    <div className="set-history" aria-label="مجموعات التمرين">
+                      {activeExercise.sets.length === 0 ? (
+                        <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p>
+                      ) : (
+                        (() => {
+                          let workingIndex = 0;
+                          return activeExercise.sets.map((set) => {
+                            if (set.type === "working") workingIndex += 1;
+                            return (
+                              <article className="set-chip" key={set.id}>
+                                <span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
+                                <b dir="ltr">{set.weightKg} <small>كغ</small></b>
+                                <b dir="ltr">× {set.reps}</b>
+                                <span>RIR {set.rir ?? "—"}</span>
+                              </article>
+                            );
+                          });
+                        })()
+                      )}
+                    </div>
+                    <div className="exercise-card-footer">
+                      <span>{countLabel(activeExercise.sets.length, "جلسة واحدة مسجلة", "جلسات مسجلة")}</span>
+                      <button type="button" onClick={openCompactSetSheet}><Plus size={16} /> إضافة جلسة</button>
+                    </div>
+                  </article>
+                )}
+              </>
+            )
+          ) : otherSessionsForDay.length === 0 ? (
+            <div className="workout-day-empty">
+              <Dumbbell size={18} />
+              <span>لا يوجد تمرين مسجل في هذا اليوم</span>
+              <button type="button" className="text-action" onClick={() => startWorkout()}><Plus size={16} /> إضافة تمرين</button>
+            </div>
+          ) : null}
         </div>
       </section>
       )}
 
-      {workoutView !== "active" && (
-        <div className="segment-control" role="tablist" aria-label="أقسام التمرين">
-          <button className={workoutView === "templates" ? "selected" : ""} onClick={() => setWorkoutView("templates")}>ابدأ الآن</button>
-          <button className={workoutView === "equipment" ? "selected" : ""} onClick={() => setWorkoutView("equipment")}>المعدات</button>
-        </div>
-      )}
-
-      {workoutView === "templates" && (
+      {workoutView === "templates" && !data.activeWorkout && data.templates.length > 0 && (
         <section className="section-block">
           <div className="section-title">
-            <div><p className="eyebrow">ادخل النادي وابدأ</p><h2>تمرين مباشر</h2></div>
+            <div><p className="eyebrow">قوالبك</p><h2>ابدأ من قالب</h2></div>
           </div>
-          {data.templates.length === 0 ? (
-            <EmptyState icon={<Dumbbell size={27} />} title="ابدأ من أرض النادي" body="أنشئ حصة، أضف تمرينك الحالي، وسجّل مجموعاتك فورًا. المعدات محفوظة في قسم مستقل." action={<AppButton onClick={() => startWorkout()} icon={<ArrowLeft size={18} />}>ابدأ تمرينًا</AppButton>} />
-          ) : (
-            <div className="template-list">
-              {data.templates.map((template) => (
-                <article className="template-card" key={template.id}>
-                  <div className="template-symbol"><ClipboardList size={22} /></div>
-                  <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
-                  <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
-                  <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
-                </article>
-              ))}
-            </div>
-          )}
-          <div className="secondary-cta"><span>لا تحتاج خطة جاهزة لتبدأ.</span><AppButton variant="secondary" onClick={() => startWorkout()} icon={<Dumbbell size={18} />}>تمرين جديد</AppButton></div>
+          <div className="template-list">
+            {data.templates.map((template) => (
+              <article className="template-card" key={template.id}>
+                <div className="template-symbol"><ClipboardList size={22} /></div>
+                <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
+                <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
+                <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
@@ -1476,81 +1559,6 @@ export default function Home() {
         </section>
       )}
 
-      {workoutView === "active" && data.activeWorkout && (
-        <section className="live-workout">
-          <div className="live-header">
-            <button className="icon-button surface" onClick={() => setWorkoutView("templates")} aria-label="العودة لبدء التمرين"><ChevronLeft size={20} /></button>
-            <div><p className="eyebrow">حصة جارية · {formatDuration(data.activeWorkout.startedAt)}</p><h1>{data.activeWorkout.name}</h1></div>
-            <button className="discard-button" onClick={discardWorkout}>تجاهل</button>
-            <button className="finish-button" onClick={finishWorkout}>إنهاء</button>
-          </div>
-
-          <div className="live-metrics" aria-label="ملخص الحصة الجارية">
-            <article><span>تمارين</span><b>{formatNumber(data.activeWorkout.exercises.length)}</b></article>
-            <article><span>مجموعات</span><b>{formatNumber(activeSetCount)}</b></article>
-            <article><span>حجم العمل</span><b>{formatNumber(activeVolume)} <small>كغ</small></b></article>
-          </div>
-
-          {data.activeWorkout.exercises.length === 0 ? (
-            <EmptyState icon={<CirclePlus size={27} />} title="ابدأ بإضافة تمرين" body="اختر قسم العضلة، ثم اختر التمرين وابدأ تسجيل مجموعاتك." action={<AppButton onClick={() => setSheet("exercise")} icon={<Plus size={18} />}>إضافة تمرين</AppButton>} />
-          ) : (
-            <>
-              <div className="exercise-tabs" aria-label="تمارين الحصة">
-                {data.activeWorkout.exercises.map((item) => {
-                  const exercise = exerciseCatalog.find((entry) => entry.id === item.exerciseId);
-                  return exercise ? <button key={item.exerciseId} className={selectedExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)}</b></button> : null;
-                })}
-                <button className="add-exercise-tab" onClick={() => setSheet("exercise")} aria-label="إضافة تمرين"><Plus size={17} /></button>
-              </div>
-              {activeExerciseMeta && activeExercise && (
-                <article className="exercise-log-card">
-                  <div className="exercise-log-title">
-                    <div><p className="eyebrow">{muscleGroupFor(activeExerciseMeta.primaryMuscle) ?? activeExerciseMeta.primaryMuscle} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}</p><h2>{activeExerciseMeta.name}</h2></div>
-                    <div className="exercise-log-actions">
-                      <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
-                      <Dumbbell size={22} />
-                    </div>
-                  </div>
-                  {latestSetFor(activeExerciseMeta.id) ? (
-                    <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
-                  ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
-                  {(() => {
-                    const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
-                    return personalBest ? (
-                      <div className="previous-performance pb-row"><Sparkles size={17} /><span>أقوى أداء: <b>{formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</b></span></div>
-                    ) : null;
-                  })()}
-                  {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
-                  <div className="set-history" aria-label="مجموعات التمرين">
-                    {activeExercise.sets.length === 0 ? (
-                      <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p>
-                    ) : (
-                      (() => {
-                        let workingIndex = 0;
-                        return activeExercise.sets.map((set) => {
-                          if (set.type === "working") workingIndex += 1;
-                          return (
-                            <article className="set-chip" key={set.id}>
-                              <span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
-                              <b dir="ltr">{set.weightKg} <small>كغ</small></b>
-                              <b dir="ltr">× {set.reps}</b>
-                              <span>RIR {set.rir ?? "—"}</span>
-                            </article>
-                          );
-                        });
-                      })()
-                    )}
-                  </div>
-                  <div className="exercise-card-footer">
-                    <span>{countLabel(activeExercise.sets.length, "جلسة واحدة مسجلة", "جلسات مسجلة")}</span>
-                    <button type="button" onClick={openCompactSetSheet}><Plus size={16} /> إضافة جلسة</button>
-                  </div>
-                </article>
-              )}
-            </>
-          )}
-        </section>
-      )}
     </>
   );
 
