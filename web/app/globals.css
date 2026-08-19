@@ -245,6 +245,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workout-day-rail button.selected i { background: var(--accent-ink); }
 .workout-day-rail button:active { transform: scale(.94); }
 
+.workout-summary-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 12px; }
+.workout-summary-metrics article { padding: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(255,255,255,.025); text-align: center; }
+.workout-summary-metrics span { display: block; color: var(--subtle); font-size: 10px; }
+.workout-summary-metrics b { display: block; margin-top: 3px; color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
+.workout-summary-metrics b small { color: var(--accent); font-size: 10px; }
+
 .workout-day-log { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .workout-day-log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
 .workout-day-log-head strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -315,11 +321,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .exercise-log-title h2 { margin: 3px 0 0; font-size: 18px; }
 .exercise-log-actions { display: flex; align-items: center; gap: 10px; }
 .exercise-log-actions > svg { color: var(--accent); }
-.previous-performance { display: flex; gap: 7px; align-items: center; margin: 9px 0; padding: 7px 9px; border-radius: var(--r-sm); color: var(--blue); background: rgba(132,184,234,.1); font-size: 11px; }
-.previous-performance.pb-row { color: var(--accent); background: var(--accent-wash); }
-.previous-performance.pb-row b { color: var(--ink); }
-.previous-performance b { color: #dcebfa; }
-.previous-performance.muted { color: var(--muted); background: rgba(255,255,255,.035); }
+.performance-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 9px 0; }
+.performance-stats article { padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface-soft); }
+.performance-stats span { display: flex; align-items: center; gap: 5px; color: var(--blue); font-size: 11px; font-weight: 600; }
+.performance-stats span svg { flex: 0 0 auto; }
+.performance-stats b { display: block; margin-top: 6px; color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+.performance-stats b small { color: var(--subtle); font-size: 10px; }
+.performance-stats small { display: block; margin-top: 6px; color: var(--subtle); font-size: 11px; line-height: 1.4; }
+.performance-stats article.pb { background: var(--accent-wash); }
+.performance-stats article.pb span { color: var(--accent); }
+.performance-stats article.muted span { color: var(--subtle); }
 .exercise-note-callout { margin: -6px 0 13px; padding: 9px 11px; border-inline-start: 2px solid var(--accent); border-radius: 8px; color: var(--muted); background: var(--surface-soft); font-size: 11px; line-height: 1.65; }
 
 .set-history { display: grid; gap: 5px; margin: 9px 0; }

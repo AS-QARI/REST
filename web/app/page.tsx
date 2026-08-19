@@ -380,6 +380,13 @@ function countLoggedSets(exercises: WorkoutExercise[]) {
   return exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
 }
 
+function countLoggedReps(exercises: WorkoutExercise[]) {
+  return exercises.reduce(
+    (total, exercise) => total + exercise.sets.filter((set) => set.type === "working").reduce((setTotal, set) => setTotal + set.reps, 0),
+    0,
+  );
+}
+
 function workoutVolume(exercises: WorkoutExercise[]) {
   return exercises.reduce(
     (total, exercise) => total + exercise.sets
@@ -813,6 +820,7 @@ export default function Home() {
   const exercisePersonalBest = getExercisePersonalBest(exerciseToAdd);
   const daysSinceLastTrained = exerciseHistory.length ? daysSince(exerciseHistory[0].date) : null;
   const activeSetCount = data.activeWorkout ? countLoggedSets(data.activeWorkout.exercises) : 0;
+  const activeRepCount = data.activeWorkout ? countLoggedReps(data.activeWorkout.exercises) : 0;
   const activeVolume = data.activeWorkout ? workoutVolume(data.activeWorkout.exercises) : 0;
   const totalLoggedVolume = useMemo(
     () => data.sessions.reduce((total, session) => total + workoutVolume(session.exercises), 0),
@@ -1402,12 +1410,17 @@ export default function Home() {
             );
           })}
         </div>
+        {activeSetCount > 0 && (
+          <div className="workout-summary-metrics" aria-label="ملخص الحصة">
+            <article><span>عدات</span><b>{formatNumber(activeRepCount)}</b></article>
+            <article><span>جلسات</span><b>{formatNumber(activeSetCount)}</b></article>
+            <article><span>الوزن المرفوع</span><b>{formatNumber(activeVolume)} <small>كغ</small></b></article>
+          </div>
+        )}
         <div className="workout-day-log">
           <div className="workout-day-log-head">
             <strong>{formatDayHeading(selectedWorkoutDate.toISOString())}</strong>
-            {data.activeWorkout
-              ? <span>{countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
-              : <span>{countLabel(selectedWorkoutDaySessions.length, "حصة واحدة", "حصص")}</span>}
+            <span>{countLabel(selectedWorkoutDaySessions.length, "حصة واحدة", "حصص")}</span>
           </div>
 
           {otherSessionsForDay.map((session) => (
@@ -1453,14 +1466,21 @@ export default function Home() {
                         <Dumbbell size={22} />
                       </div>
                     </div>
-                    {latestSetFor(activeExerciseMeta.id) ? (
-                      <div className="previous-performance"><TrendingUp size={17} /><span>آخر أداء: <b>{latestSetFor(activeExerciseMeta.id)?.weightKg} كغ × {latestSetFor(activeExerciseMeta.id)?.reps}</b></span></div>
-                    ) : <div className="previous-performance muted"><Sparkles size={17} /><span>هذه أول مرة تسجل هذا التمرين.</span></div>}
                     {(() => {
+                      const latestSet = latestSetFor(activeExerciseMeta.id);
                       const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
-                      return personalBest ? (
-                        <div className="previous-performance pb-row"><Sparkles size={17} /><span>أقوى أداء: <b>{formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</b></span></div>
-                      ) : null;
+                      return (
+                        <div className="performance-stats">
+                          <article className={latestSet ? "" : "muted"}>
+                            <span><TrendingUp size={15} /> آخر أداء</span>
+                            {latestSet ? <b>{formatNumber(latestSet.weightKg)} <small>كغ</small> × {formatNumber(latestSet.reps)}</b> : <small>أول مرة تسجل هذا التمرين</small>}
+                          </article>
+                          <article className={personalBest ? "pb" : "muted"}>
+                            <span><Sparkles size={15} /> أقوى أداء</span>
+                            {personalBest ? <b>{formatNumber(personalBest.weightKg)} <small>كغ</small> × {formatNumber(personalBest.reps)}</b> : <small>لا يوجد سجل بعد</small>}
+                          </article>
+                        </div>
+                      );
                     })()}
                     {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
                     <div className="set-history" aria-label="مجموعات التمرين">
