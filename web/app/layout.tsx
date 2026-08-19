@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Arabic } from "next/font/google";
-import { headers } from "next/headers";
 import "./globals.css";
 
 const arabicFont = Noto_Sans_Arabic({
@@ -10,29 +9,28 @@ const arabicFont = Noto_Sans_Arabic({
   weight: ["400", "500", "600", "700"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host") || "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") || "http";
-  const origin = `${protocol}://${host}`;
-  return {
-    metadataBase: new URL(origin),
+const SITE_ORIGIN = "https://as-qari.github.io";
+const BASE_PATH = "/REST";
+
+export const dynamic = "force-static";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_ORIGIN),
+  title: "REST — رست",
+  description: "رفيقك الشخصي للتمرين والتغذية والتقدم.",
+  manifest: `${BASE_PATH}/manifest.webmanifest`,
+  icons: {
+    icon: [{ url: `${BASE_PATH}/icon-192.png`, sizes: "192x192", type: "image/png" }],
+    apple: [{ url: `${BASE_PATH}/icon-192.png`, sizes: "192x192", type: "image/png" }],
+  },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "REST" },
+  openGraph: {
     title: "REST — رست",
-    description: "رفيقك الشخصي للتمرين والتغذية والتقدم.",
-    manifest: "/manifest.webmanifest",
-    icons: {
-      icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
-      apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
-    },
-    appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "REST" },
-    openGraph: {
-      title: "REST — رست",
-      description: "تمرّن · سجّل · تحسّن",
-      images: [{ url: `${origin}/og.png`, width: 1536, height: 1024, alt: "REST — رست" }],
-    },
-    twitter: { card: "summary_large_image", title: "REST — رست", images: [`${origin}/og.png`] },
-  };
-}
+    description: "تمرّن · سجّل · تحسّن",
+    images: [{ url: `${SITE_ORIGIN}${BASE_PATH}/og.png`, width: 1536, height: 1024, alt: "REST — رست" }],
+  },
+  twitter: { card: "summary_large_image", title: "REST — رست", images: [`${SITE_ORIGIN}${BASE_PATH}/og.png`] },
+};
 
 export const viewport: Viewport = {
   themeColor: "#000000",

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const OWNER_USERNAME = "OREZ";
 const OWNER_AUTH_EMAIL = "orez@rest.invalid";
+const LOCAL_PASSWORD_HASH = "168167b979b5fbf412591964c809645cd7d13b52627f208fc1508dd7e6046886";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -20,14 +21,10 @@ function getSupabaseClient() {
 }
 
 async function localPasswordMatches(password: string) {
-  const response = await fetch("/api/local-auth", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
-  });
-  if (!response.ok) return false;
-  const result = (await response.json()) as { ok?: boolean };
-  return result.ok === true;
+  const bytes = new TextEncoder().encode(password);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hashed = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hashed === LOCAL_PASSWORD_HASH;
 }
 
 export async function authenticateOwner(username: string, password: string): Promise<{ ok: boolean; message: string }> {

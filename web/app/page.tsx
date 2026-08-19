@@ -39,6 +39,8 @@ import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner, isSupabaseConfigured, loadOwnerSnapshot, saveOwnerSnapshot } from "./supabase";
 
+export const dynamic = "force-static";
+
 type Tab = "today" | "workout" | "nutrition" | "progress";
 type WorkoutView = "templates" | "equipment" | "active";
 type Sheet =
@@ -574,7 +576,7 @@ export default function Home() {
       setLoaded(true);
     })();
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      navigator.serviceWorker.register("/REST/sw.js", { scope: "/REST/" }).catch(() => undefined);
     }
     return () => { active = false; };
   }, []);
