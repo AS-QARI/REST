@@ -298,6 +298,13 @@ function shiftDate(value: Date, days: number) {
   return next;
 }
 
+function dateOnSelectedDay(selectedDay: Date) {
+  const now = new Date();
+  const combined = new Date(selectedDay);
+  combined.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  return combined.toISOString();
+}
+
 function lastSevenDays() {
   const start = shiftDate(new Date(), -6);
   return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
@@ -395,6 +402,31 @@ async function readFileAsDataUrl(file: File) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("تعذّرت قراءة الصورة"));
+    image.src = src;
+  });
+}
+
+// Phone cameras produce multi-MB, multi-thousand-pixel photos; storing those raw as
+// base64 makes every render that paints a thumbnail (picker lists, equipment cards)
+// decode a full-size image, which is what shows up as the picker "hanging".
+async function readFileAsCompressedPhoto(file: File, maxDimension = 1024, quality = 0.8) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageElement(dataUrl);
+  const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  const context = canvas.getContext("2d");
+  if (!context) return dataUrl;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
 function Logo() {
@@ -795,6 +827,7 @@ export default function Home() {
     setSelectedExerciseId(activeWorkout.exercises[0]?.exerciseId || "");
     setTab("workout");
     setWorkoutView("active");
+    if (activeWorkout.exercises.length === 0) setSheet("exercise");
     showToast(template ? `بدأ تمرين ${template.name}` : "بدأ التمرين الفارغ");
   };
 
@@ -807,7 +840,7 @@ export default function Home() {
       showToast("تم إنهاء التمرين بلا حفظ", () => persist(previous));
       return;
     }
-    const completed: WorkoutSession = { ...data.activeWorkout, completedAt: new Date().toISOString() };
+    const completed: WorkoutSession = { ...data.activeWorkout, completedAt: dateOnSelectedDay(selectedWorkoutDate) };
     persist({ ...data, activeWorkout: null, sessions: [completed, ...data.sessions] });
     setWorkoutView("templates");
     showToast("تم حفظ التمرين محليًا", () => persist(previous));
@@ -1792,7 +1825,7 @@ export default function Home() {
                     onChange={async (event) => {
                       const file = event.target.files?.[0];
                       if (file) {
-                        const dataUrl = await readFileAsDataUrl(file);
+                        const dataUrl = await readFileAsCompressedPhoto(file);
                         setEquipmentForm((current) => ({ ...current, photos: [...current.photos, dataUrl] }));
                       }
                       event.target.value = "";
@@ -1823,7 +1856,7 @@ export default function Home() {
       {sheet === "template" && <Sheet title="إنشاء جدولك" onClose={() => setSheet(null)}><form className="form-stack sheet-form" onSubmit={saveTemplate}><label><span>اسم الجدول <b>*</b></span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="اكتب الاسم الذي يناسبك" autoFocus /></label><fieldset className="exercise-picker"><legend>اختر التمارين <em>اختياري</em></legend>{data.exercises.length === 0 ? <p className="form-hint">أضف جهازًا وتمرينًا أولًا، أو أنشئ الجدول فارغًا وأكمله لاحقًا.</p> : data.exercises.map((exercise) => <label key={exercise.id} className="check-row"><input type="checkbox" checked={templateExercises.includes(exercise.id)} onChange={(event) => setTemplateExercises(event.target.checked ? [...templateExercises, exercise.id] : templateExercises.filter((id) => id !== exercise.id))} /><span>{exercise.name}</span><small>{exercise.primaryMuscle}</small></label>)}</fieldset><AppButton type="submit" icon={<Check size={18} />}>حفظ الجدول</AppButton></form></Sheet>}
 
       {sheet === "exercise" && (
-        <Sheet title={`تسجيل تمرين · ${formatDate(new Date().toISOString())}`} onClose={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); }}>
+        <Sheet title={`تسجيل تمرين · ${formatDate(selectedWorkoutDate.toISOString())}`} onClose={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); }}>
           <form className="exercise-session-form" onSubmit={(event) => { event.preventDefault(); saveExerciseDraft(true); }}>
             <div className="session-tool-row">
               <label className="library-search">
