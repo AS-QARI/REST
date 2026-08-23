@@ -30,6 +30,14 @@
   --sand: #ff9f0a;
   --lavender: #bf5af2;
   --danger: #ff453a;
+  --success: #30d158;
+
+  /* Progress bands — shared by the calorie ring and the macro bars */
+  --track: rgba(255, 255, 255, 0.08);
+  --p-low: #ff9f0a;
+  --p-mid: #5ac8fa;
+  --p-hit: #30d158;
+  --p-over: #ff453a;
 
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.025);
   --shadow-float: 0 -1px 0 rgba(255, 255, 255, 0.06);
@@ -96,6 +104,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .form-stack textarea { min-height: 88px; padding-block: 12px; resize: vertical; }
 .form-stack select { appearance: auto; }
 .form-stack input::placeholder, .form-stack textarea::placeholder { color: var(--subtle); }
+.form-stack .field-hint { color: var(--subtle); font-size: 12px; font-weight: 400; line-height: 1.6; }
 .form-error { margin: -6px 0 0; color: var(--danger); font-size: 13px; }
 .password-field { position: relative; }
 .password-field input { padding-left: 46px; }
@@ -351,7 +360,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    Nutrition tab
    ============================================================ */
 .nutrition-summary { display: flex; align-items: center; gap: 20px; padding: 19px; border: 1px solid var(--line-strong); border-radius: var(--r-xl); background: linear-gradient(135deg, var(--surface-raised), var(--surface) 70%); }
-.calorie-ring { --progress: 0%; display: grid; place-items: center; flex: 0 0 auto; width: 126px; height: 126px; border-radius: 50%; background: conic-gradient(var(--accent) var(--progress), rgba(255,255,255,.08) 0); }
+.calorie-ring { --progress: 0%; --tone: var(--accent); display: grid; place-items: center; flex: 0 0 auto; width: 126px; height: 126px; border-radius: 50%; background: conic-gradient(var(--tone) var(--progress), var(--track) 0); transition: background .35s ease; }
+.calorie-ring.low { --tone: var(--p-low); }
+.calorie-ring.mid { --tone: var(--p-mid); }
+.calorie-ring.hit { --tone: var(--p-hit); }
+.calorie-ring.over { --tone: var(--p-over); }
+.calorie-ring.hit > div, .calorie-ring.over > div { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 16%, transparent); }
+.calorie-ring .ring-pct { display: block; margin-top: 3px; color: var(--tone); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .calorie-ring > div { display: grid; place-content: center; width: 103px; height: 103px; border-radius: 50%; background: var(--surface); text-align: center; }
 .calorie-ring span, .calorie-ring small { color: var(--muted); font-size: 10px; }
 .calorie-ring strong { margin: 2px 0; font-size: 22px; }
@@ -361,15 +376,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .macro-summary .text-action { padding-bottom: 0; }
 .macro-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 11px; }
 .macro-card { padding: 13px 11px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.macro-card { --tone: var(--subtle); }
+.macro-card.low { --tone: var(--p-low); }
+.macro-card.mid { --tone: var(--p-mid); }
+.macro-card.hit { --tone: var(--p-hit); }
+.macro-card.over { --tone: var(--p-over); }
 .macro-card > div:first-child { display: grid; gap: 2px; }
 .macro-card span { color: var(--muted); font-size: 11px; }
+.macro-card .macro-label { display: flex; align-items: center; gap: 5px; }
+.macro-card .macro-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--macro-hue, var(--accent)); }
+.macro-card.protein { --macro-hue: var(--accent); }
+.macro-card.carbs { --macro-hue: var(--blue); }
+.macro-card.fat { --macro-hue: var(--sand); }
 .macro-card b { font-size: 14px; }
 .macro-card small { display: block; margin-top: 7px; color: var(--subtle); font-size: 10px; }
-.macro-track { height: 5px; overflow: hidden; margin-top: 10px; border-radius: var(--r-pill); background: rgba(255,255,255,.08); }
-.macro-track span { display: block; height: 100%; border-radius: inherit; }
-.macro-track .protein { background: var(--accent); }
-.macro-track .carbs { background: var(--blue); }
-.macro-track .fat { background: var(--sand); }
+.macro-card small .macro-pct { color: var(--tone); font-weight: 700; font-variant-numeric: tabular-nums; }
+.macro-track { height: 6px; overflow: hidden; margin-top: 10px; border-radius: var(--r-pill); background: var(--track); }
+.macro-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--tone); transition: width .35s ease, background-color .35s ease; }
+.macro-card.low .macro-track span, .macro-card.mid .macro-track span, .macro-card.hit .macro-track span, .macro-card.over .macro-track span { min-width: 5px; }
+.progress-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 9px 2px 0; padding: 0; list-style: none; }
+.progress-legend li { display: flex; align-items: center; gap: 5px; color: var(--subtle); font-size: 10px; }
+.progress-legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
+.progress-legend .low { --tone: var(--p-low); }
+.progress-legend .mid { --tone: var(--p-mid); }
+.progress-legend .hit { --tone: var(--p-hit); }
+.progress-legend .over { --tone: var(--p-over); }
 
 /* ============================================================
    Progress tab
@@ -852,12 +883,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .compact-link span { white-space: nowrap; }
 .exercise-session-form .exercise-filter { margin: -1px 0 0; }
 .exercise-picker-list { display: grid; max-height: 330px; overflow-y: auto; border-radius: var(--r-lg); background: var(--canvas); }
-.exercise-picker-list > button { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 61px; padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: start; }
+.exercise-picker-list > button { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 72px; padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: start; }
 .exercise-picker-list > button:last-child { border-bottom: 0; }
 .exercise-picker-list > button > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
 .exercise-picker-list strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .exercise-picker-list small { color: var(--muted); font-size: 10px; }
 .exercise-picker-list > button > svg { color: var(--subtle); }
+.picker-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+.picker-stats > span { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 7px; color: var(--ink-dim); background: var(--surface-soft); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.picker-stats .picker-last { color: var(--accent); background: var(--accent-wash); }
+.picker-stats .picker-when { padding-inline: 2px; color: var(--subtle); background: transparent; font-weight: 500; }
+.picker-stats.empty { color: var(--subtle); font-size: 10px; }
+
 .exercise-picker-list > button.added { opacity: .38; }
 .picker-thumb, .selected-equipment-thumb { display: grid; place-items: center; overflow: hidden; width: 36px; height: 36px; border-radius: 10px; color: var(--accent); background: var(--surface-soft); }
 .picker-thumb img, .selected-equipment-thumb img { width: 100%; height: 100%; object-fit: cover; }

@@ -147,6 +147,26 @@ const EMPTY_DATA: AppData = {
   nutritionTarget: { calories: 0, protein: 0, carbs: 0, fat: 0 },
 };
 
+function exerciseForEquipment(equipment: Equipment, name?: string): Exercise {
+  return {
+    id: uid(),
+    name: name?.trim() || equipment.name,
+    equipmentId: equipment.id,
+    primaryMuscle: equipment.primaryMuscle,
+    repMin: 8,
+    repMax: 12,
+  };
+}
+
+// Equipment saved without an exercise name used to stay invisible in the exercise
+// picker, which lists exercises only. Give every machine a default exercise so it
+// is loggable the moment it is added.
+function withEquipmentExercises(base: AppData): AppData {
+  const missing = base.equipment.filter((equipment) => !base.exercises.some((exercise) => exercise.equipmentId === equipment.id));
+  if (missing.length === 0) return base;
+  return { ...base, exercises: [...base.exercises, ...missing.map((equipment) => exerciseForEquipment(equipment))] };
+}
+
 function mergeLoopRepHistory(base: AppData): AppData {
   const exerciseSeeds = new Map<string, { muscle: string }>();
   LOOPREP_SESSIONS.forEach(([, exercises]) => exercises.forEach(([name, muscle]) => exerciseSeeds.set(name, { muscle })));
@@ -327,8 +347,27 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 }
 
+/* Progress bands: amber = بدأت، أزرق = في الطريق، أخضر = وصلت، أحمر = تجاوزت */
+function progressBand(current: number, target: number) {
+  if (!target) return { tone: "", percent: 0, width: 0 };
+  const percent = Math.round((current / target) * 100);
+  const width = Math.min(100, Math.max(0, percent));
+  if (percent <= 0) return { tone: "", percent, width };
+  if (percent < 50) return { tone: "low", percent, width };
+  if (percent < 90) return { tone: "mid", percent, width };
+  if (percent <= 110) return { tone: "hit", percent, width };
+  return { tone: "over", percent, width: 100 };
+}
+
 function countLabel(count: number, singularPhrase: string, pluralPhrase: string) {
   return count === 1 ? singularPhrase : `${formatNumber(count)} ${pluralPhrase}`;
+}
+
+function daysAgoLabel(days: number) {
+  if (days === 0) return "اليوم";
+  if (days === 1) return "أمس";
+  if (days === 2) return "قبل يومين";
+  return `منذ ${formatNumber(days)} ${days <= 10 ? "أيام" : "يومًا"}`;
 }
 
 function formatDate(value: string) {
@@ -614,6 +653,7 @@ export default function Home() {
           // Offline mode remains the source of truth until the next successful sync.
         }
       }
+      next = withEquipmentExercises(next);
       const merged = mergeLoopRepHistory(next);
       const importedCount = merged.sessions.length - next.sessions.length;
       if (importedCount > 0) {
@@ -772,6 +812,28 @@ export default function Home() {
       .sort((a, b) => b.weightKg - a.weightKg)
       .slice(0, 5);
   }, [data.sessions, exerciseCatalog]);
+  // The picker doubles as a history sheet: each row carries how much work that
+  // exercise already has behind it, so past exercises stay readable while
+  // picking the next one instead of only the one being logged.
+  const exerciseStatsById = useMemo(() => {
+    const stats = new Map<string, { sessions: number; reps: number; lastDate: string; lastWeightKg: number; lastReps: number }>();
+    sortedSessions.forEach((session) => session.exercises.forEach((logged) => {
+      const working = logged.sets.filter((set) => set.type === "working");
+      const sets = working.length ? working : logged.sets;
+      if (!sets.length) return;
+      const reps = sets.reduce((total, set) => total + set.reps, 0);
+      const current = stats.get(logged.exerciseId);
+      if (current) {
+        current.sessions += 1;
+        current.reps += reps;
+        return;
+      }
+      // sortedSessions is newest first, so the first hit is the latest session.
+      const heaviest = sets.reduce((best, set) => (set.weightKg > best.weightKg ? set : best), sets[0]);
+      stats.set(logged.exerciseId, { sessions: 1, reps, lastDate: session.completedAt, lastWeightKg: heaviest.weightKg, lastReps: heaviest.reps });
+    }));
+    return stats;
+  }, [sortedSessions]);
   const exercisesInSelectedGroup = useMemo(
     () => {
       const query = exerciseSearch.trim().toLocaleLowerCase("en");
@@ -995,19 +1057,25 @@ export default function Home() {
     event.preventDefault();
     if (!equipmentForm.name.trim() || !equipmentForm.primaryMuscle) return;
     if (editingEquipmentId) {
-      persist({
+      const previousEquipment = data.equipment.find((item) => item.id === editingEquipmentId);
+      const updatedEquipment: Equipment[] = data.equipment.map((item) => item.id === editingEquipmentId
+        ? {
+            ...item,
+            name: equipmentForm.name.trim(),
+            primaryMuscle: equipmentForm.primaryMuscle,
+            type: equipmentForm.type,
+            photos: equipmentForm.photos.length ? equipmentForm.photos : undefined,
+            notes: equipmentForm.notes.trim() || undefined,
+          }
+        : item);
+      persist(withEquipmentExercises({
         ...data,
-        equipment: data.equipment.map((item) => item.id === editingEquipmentId
-          ? {
-              ...item,
-              name: equipmentForm.name.trim(),
-              primaryMuscle: equipmentForm.primaryMuscle,
-              type: equipmentForm.type,
-              photos: equipmentForm.photos.length ? equipmentForm.photos : undefined,
-              notes: equipmentForm.notes.trim() || undefined,
-            }
-          : item),
-      });
+        equipment: updatedEquipment,
+        // An exercise that still carries the old machine name was auto-created from it, so it follows the rename.
+        exercises: data.exercises.map((exercise) => exercise.equipmentId === editingEquipmentId && exercise.name === previousEquipment?.name
+          ? { ...exercise, name: equipmentForm.name.trim(), primaryMuscle: equipmentForm.primaryMuscle }
+          : exercise),
+      }));
       closeEquipmentSheet();
       showToast("تم تحديث الجهاز");
       return;
@@ -1021,23 +1089,14 @@ export default function Home() {
       notes: equipmentForm.notes.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
-    const exercise: Exercise | null = equipmentForm.exerciseName.trim()
-      ? {
-          id: uid(),
-          name: equipmentForm.exerciseName.trim(),
-          equipmentId: equipment.id,
-          primaryMuscle: equipment.primaryMuscle,
-          repMin: 8,
-          repMax: 12,
-        }
-      : null;
+    const exercise = exerciseForEquipment(equipment, equipmentForm.exerciseName);
     persist({
       ...data,
       equipment: [equipment, ...data.equipment],
-      exercises: exercise ? [exercise, ...data.exercises] : data.exercises,
+      exercises: [exercise, ...data.exercises],
     });
     closeEquipmentSheet();
-    showToast(exercise ? "تم حفظ الجهاز والتمرين" : "تم حفظ الجهاز محليًا");
+    showToast("تم حفظ الجهاز والتمرين");
   };
 
   const saveTemplate = (event: FormEvent) => {
@@ -1313,6 +1372,8 @@ export default function Home() {
 
   const todayWeekDays = lastSevenDays();
   const nutritionRemaining = data.nutritionTarget.calories - nutrition.calories;
+  const calorieBand = progressBand(nutrition.calories, data.nutritionTarget.calories);
+  const hasNutritionTarget = Boolean(data.nutritionTarget.calories || data.nutritionTarget.protein || data.nutritionTarget.carbs || data.nutritionTarget.fat);
 
   const todayContent = (
     <>
@@ -1589,22 +1650,39 @@ export default function Home() {
         <button className="icon-button surface" onClick={openTargetSheet} aria-label="ضبط أهداف التغذية"><Target size={20} /></button>
       </header>
       <section className="nutrition-summary">
-        <div className={`calorie-ring${data.nutritionTarget.calories ? "" : " empty"}`} style={{ "--progress": `${data.nutritionTarget.calories ? Math.min(100, (nutrition.calories / data.nutritionTarget.calories) * 100) : 0}%` } as React.CSSProperties}>
-          <div><span>السعرات</span><strong>{formatNumber(nutrition.calories)}</strong><small>{data.nutritionTarget.calories ? `من ${formatNumber(data.nutritionTarget.calories)}` : "حدد هدفك"}</small></div>
+        <div className={`calorie-ring${data.nutritionTarget.calories ? "" : " empty"}${calorieBand.tone ? ` ${calorieBand.tone}` : ""}`} style={{ "--progress": `${calorieBand.width}%` } as React.CSSProperties}>
+          <div><span>السعرات</span><strong>{formatNumber(nutrition.calories)}</strong><small>{data.nutritionTarget.calories ? `من ${formatNumber(data.nutritionTarget.calories)}` : "حدد هدفك"}</small>{data.nutritionTarget.calories ? <small className="ring-pct" dir="ltr">{calorieBand.percent}%</small> : null}</div>
         </div>
         <div className="macro-summary">
           <p className="eyebrow">ملخص اليوم</p>
-          <h2>{data.nutritionTarget.calories ? `${formatNumber(Math.max(0, data.nutritionTarget.calories - nutrition.calories))} kcal متبقية` : "حدّد أهدافك أولًا"}</h2>
+          <h2>{data.nutritionTarget.calories ? (nutritionRemaining >= 0 ? `${formatNumber(nutritionRemaining)} kcal متبقية` : `تجاوزت بـ ${formatNumber(Math.abs(nutritionRemaining))} kcal`) : "حدّد أهدافك أولًا"}</h2>
           <button className="text-action" onClick={openTargetSheet}><Settings2 size={16} /> ضبط الأهداف</button>
         </div>
       </section>
       <div className="macro-grid">
-        {[
+        {([
           ["بروتين", nutrition.protein, data.nutritionTarget.protein, "protein"],
           ["كربوهيدرات", nutrition.carbs, data.nutritionTarget.carbs, "carbs"],
           ["دهون", nutrition.fat, data.nutritionTarget.fat, "fat"],
-        ].map(([label, current, target, tone]) => <article className="macro-card" key={String(label)}><div><span>{label}</span><b>{formatNumber(Number(current))} غ</b></div><div className="macro-track"><span className={String(tone)} style={{ width: `${Number(target) ? Math.min(100, (Number(current) / Number(target)) * 100) : 0}%` }} /></div><small>{Number(target) ? `من ${formatNumber(Number(target))} غ` : "لا يوجد هدف"}</small></article>)}
+        ] as const).map(([label, current, target, macro]) => {
+          const band = progressBand(current, target);
+          return (
+            <article className={`macro-card ${macro}${band.tone ? ` ${band.tone}` : ""}`} key={label}>
+              <div><span className="macro-label"><i className="macro-dot" />{label}</span><b>{formatNumber(current)} غ</b></div>
+              <div className="macro-track" role="progressbar" aria-valuenow={band.percent} aria-valuemin={0} aria-valuemax={100} aria-label={`${label}: ${band.percent}% من الهدف`}><span style={{ width: `${band.width}%` }} /></div>
+              <small>{target ? <><span className="macro-pct" dir="ltr">{band.percent}%</span>{` · من ${formatNumber(target)} غ`}</> : "لا يوجد هدف"}</small>
+            </article>
+          );
+        })}
       </div>
+      {hasNutritionTarget && (
+        <ul className="progress-legend" aria-label="دلالة ألوان التقدم">
+          <li className="low"><i />أقل من النصف</li>
+          <li className="mid"><i />في الطريق</li>
+          <li className="hit"><i />وصلت الهدف</li>
+          <li className="over"><i />تجاوزت</li>
+        </ul>
+      )}
       <section className="section-block">
         <div className="section-title"><div><p className="eyebrow">وجبات اليوم</p><h2>ما سجلته</h2></div><button className="text-action" onClick={() => openMealSheet()}><Plus size={17} /> إضافة</button></div>
         {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => openMealSheet()} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon"><Utensils size={19} /></div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
@@ -1873,7 +1951,7 @@ export default function Home() {
             </fieldset>
             <label><span>نوع الجهاز</span><select value={equipmentForm.type} onChange={(event) => setEquipmentForm({ ...equipmentForm, type: event.target.value })}>{EQUIPMENT_TYPES.map((type) => <option value={type} key={type}>{type}</option>)}</select></label>
             {!editingEquipmentId && (
-              <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input dir="ltr" value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder="e.g. Seated Chest Press" /></label>
+              <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input dir="ltr" value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder={equipmentForm.name.trim() || "e.g. Seated Chest Press"} /><small className="field-hint">اتركه فارغًا وسنستخدم اسم الجهاز، ليظهر مباشرة عند إضافة تمرين.</small></label>
             )}
             <label><span>ملاحظات <em>اختياري</em></span><textarea value={equipmentForm.notes} onChange={(event) => setEquipmentForm({ ...equipmentForm, notes: event.target.value })} placeholder="رقم المقعد، إعداد الجهاز، أو أي تلميح مهم" rows={3} /></label>
             <AppButton type="submit" disabled={!equipmentForm.name.trim() || !equipmentForm.primaryMuscle} icon={<Check size={18} />}>{editingEquipmentId ? "حفظ التعديلات" : "حفظ الجهاز"}</AppButton>
@@ -1899,7 +1977,7 @@ export default function Home() {
                 <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية" dir="ltr">{(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>{group === "All" ? "الكل" : group}</button>)}</div>
                 <div className="exercise-choice-heading"><span>{selectedMuscleGroup === "All" ? "كل التمارين" : `${selectedMuscleGroup} Exercises`}</span><small>{formatNumber(exercisesInSelectedGroup.length)} تمارين</small></div>
                 {exercisesInSelectedGroup.length === 0 ? <div className="library-empty"><Search size={20} /><span>لا توجد تمارين مطابقة</span></div> : (
-                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupFor(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} reps</small></span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
+                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); const stats = exerciseStatsById.get(exercise.id); const lastGap = stats ? daysSince(stats.lastDate) : null; return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupFor(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} reps</small>{stats ? <span className="picker-stats"><span>{countLabel(stats.sessions, "جلسة واحدة", "جلسات")}</span><span>{countLabel(stats.reps, "عدة واحدة", "عدات")}</span><span className="picker-last" dir="ltr">{formatNumber(stats.lastWeightKg)} kg × {formatNumber(stats.lastReps)}</span>{lastGap !== null && <span className="picker-when">{daysAgoLabel(lastGap)}</span>}</span> : <span className="picker-stats empty">لم تتمرن عليه بعد</span>}</span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
                 )}
               </>
             ) : (
