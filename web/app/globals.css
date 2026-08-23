@@ -340,6 +340,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .performance-stats article.pb { background: var(--accent-wash); }
 .performance-stats article.pb span { color: var(--accent); }
 .performance-stats article.muted span { color: var(--subtle); }
+.performance-stats .stat-when { margin-top: 3px; font-size: 10px; }
+.exercise-history-card.compact { margin: 0 0 11px; }
+.exercise-history-card.compact .history-title { min-height: 34px; }
+
 .exercise-note-callout { margin: -6px 0 13px; padding: 9px 11px; border-inline-start: 2px solid var(--accent); border-radius: 8px; color: var(--muted); background: var(--surface-soft); font-size: 11px; line-height: 1.65; }
 
 .set-history { display: grid; gap: 5px; margin: 9px 0; }
@@ -360,11 +364,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    Nutrition tab
    ============================================================ */
 .nutrition-summary { display: flex; align-items: center; gap: 20px; padding: 19px; border: 1px solid var(--line-strong); border-radius: var(--r-xl); background: linear-gradient(135deg, var(--surface-raised), var(--surface) 70%); }
-.calorie-ring { --progress: 0%; --tone: var(--accent); display: grid; place-items: center; flex: 0 0 auto; width: 126px; height: 126px; border-radius: 50%; background: conic-gradient(var(--tone) var(--progress), var(--track) 0); transition: background .35s ease; }
+.calorie-ring { --progress: 0%; --tone: var(--accent); display: grid; place-items: center; flex: 0 0 auto; width: 126px; height: 126px; border-radius: 50%; background: conic-gradient(var(--tone) var(--progress), var(--track-tone, var(--track)) 0); transition: background .35s ease; }
 .calorie-ring.low { --tone: var(--p-low); }
 .calorie-ring.mid { --tone: var(--p-mid); }
 .calorie-ring.hit { --tone: var(--p-hit); }
 .calorie-ring.over { --tone: var(--p-over); }
+.calorie-ring.low, .calorie-ring.mid, .calorie-ring.hit, .calorie-ring.over { --track-tone: color-mix(in srgb, var(--tone) 24%, transparent); }
 .calorie-ring.hit > div, .calorie-ring.over > div { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 16%, transparent); }
 .calorie-ring .ring-pct { display: block; margin-top: 3px; color: var(--tone); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .calorie-ring > div { display: grid; place-content: center; width: 103px; height: 103px; border-radius: 50%; background: var(--surface); text-align: center; }
@@ -391,7 +396,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .macro-card b { font-size: 14px; }
 .macro-card small { display: block; margin-top: 7px; color: var(--subtle); font-size: 10px; }
 .macro-card small .macro-pct { color: var(--tone); font-weight: 700; font-variant-numeric: tabular-nums; }
-.macro-track { height: 6px; overflow: hidden; margin-top: 10px; border-radius: var(--r-pill); background: var(--track); }
+.macro-track { height: 6px; overflow: hidden; margin-top: 10px; border-radius: var(--r-pill); background: var(--track); transition: background-color .35s ease; }
+.macro-card.low .macro-track, .macro-card.mid .macro-track, .macro-card.hit .macro-track, .macro-card.over .macro-track { background: color-mix(in srgb, var(--tone) 24%, transparent); }
 .macro-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--tone); transition: width .35s ease, background-color .35s ease; }
 .macro-card.low .macro-track span, .macro-card.mid .macro-track span, .macro-card.hit .macro-track span, .macro-card.over .macro-track span { min-width: 5px; }
 .progress-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 9px 2px 0; padding: 0; list-style: none; }

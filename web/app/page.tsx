@@ -399,8 +399,17 @@ function formatDayHeading(value: string) {
   }).format(new Date(value));
 }
 
+function isAtOrAfter(session: WorkoutSession, cutoff?: { id: string; date: string }) {
+  if (!cutoff) return false;
+  return session.id === cutoff.id || new Date(session.completedAt).getTime() >= new Date(cutoff.date).getTime();
+}
+
 function daysSince(value: string) {
-  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000));
+  const then = new Date(value);
+  then.setHours(12, 0, 0, 0);
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  return Math.max(0, Math.round((now.getTime() - then.getTime()) / 86400000));
 }
 
 function sumMeal(meals: Meal[]) {
@@ -854,7 +863,8 @@ export default function Home() {
   }, [data.equipment, equipmentMuscleGroup, equipmentSearch]);
   const exerciseDraftMeta = exerciseCatalog.find((exercise) => exercise.id === exerciseToAdd);
   const exerciseDraftEquipment = data.equipment.find((equipment) => equipment.id === exerciseDraftMeta?.equipmentId);
-  const getExerciseHistory = (exerciseId: string) => sortedSessions.flatMap((session) => {
+  const getExerciseHistory = (exerciseId: string, before?: { id: string; date: string }) => sortedSessions.flatMap((session) => {
+    if (isAtOrAfter(session, before)) return [];
     const logged = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
     if (!logged?.sets.length) return [];
     const workingSets = logged.sets.filter((set) => set.type === "working");
@@ -868,6 +878,22 @@ export default function Home() {
       maxWeight: Math.max(...sets.map((set) => set.weightKg)),
     }];
   }).slice(0, 4);
+  // The session being logged is already reconciled into data.sessions, so anything
+  // that should read as "before today" has to skip it by id — otherwise the card
+  // just mirrors the set that was entered a moment ago.
+  const getExerciseHistorySummary = (exerciseId: string, before?: { id: string; date: string }) => {
+    let sessions = 0;
+    let reps = 0;
+    sortedSessions.forEach((session) => {
+      if (isAtOrAfter(session, before)) return;
+      const logged = session.exercises.find((item) => item.exerciseId === exerciseId);
+      if (!logged?.sets.length) return;
+      const working = logged.sets.filter((set) => set.type === "working");
+      sessions += 1;
+      reps += (working.length ? working : logged.sets).reduce((total, set) => total + set.reps, 0);
+    });
+    return { sessions, reps };
+  };
   const getExercisePersonalBest = (exerciseId: string) => {
     let best: SetLog | undefined;
     data.sessions.forEach((session) => session.exercises.forEach((exercise) => {
@@ -898,14 +924,16 @@ export default function Home() {
     }).format(new Date()),
     [],
   );
-  const latestSetFor = (exerciseId: string) => {
-    for (const session of data.sessions) {
+  const latestPerformanceFor = (exerciseId: string, before?: { id: string; date: string }) => {
+    for (const session of sortedSessions) {
+      if (isAtOrAfter(session, before)) continue;
       const sets = session.exercises.find((item) => item.exerciseId === exerciseId)?.sets ?? [];
       const found = [...sets].reverse().find((set) => set.type === "working");
-      if (found) return found;
+      if (found) return { set: found, date: session.completedAt };
     }
     return undefined;
   };
+  const latestSetFor = (exerciseId: string) => latestPerformanceFor(exerciseId)?.set;
 
   const activeExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === selectedExerciseId);
   const activeExerciseMeta = exerciseCatalog.find((item) => item.id === selectedExerciseId);
@@ -1528,19 +1556,35 @@ export default function Home() {
                       </div>
                     </div>
                     {(() => {
-                      const latestSet = latestSetFor(activeExerciseMeta.id);
+                      // Skip the session on screen: "آخر أداء" and the log below are about
+                      // the workouts before this one, not the sets just entered.
+                      const cutoff = data.activeWorkout ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt } : undefined;
+                      const previous = latestPerformanceFor(activeExerciseMeta.id, cutoff);
                       const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
+                      const pastSummary = getExerciseHistorySummary(activeExerciseMeta.id, cutoff);
+                      const pastSessions = getExerciseHistory(activeExerciseMeta.id, cutoff);
                       return (
-                        <div className="performance-stats">
-                          <article className={latestSet ? "" : "muted"}>
-                            <span><TrendingUp size={15} /> آخر أداء</span>
-                            {latestSet ? <b>{formatNumber(latestSet.weightKg)} <small>كغ</small> × {formatNumber(latestSet.reps)}</b> : <small>أول مرة تسجل هذا التمرين</small>}
-                          </article>
-                          <article className={personalBest ? "pb" : "muted"}>
-                            <span><Sparkles size={15} /> أقوى أداء</span>
-                            {personalBest ? <b>{formatNumber(personalBest.weightKg)} <small>كغ</small> × {formatNumber(personalBest.reps)}</b> : <small>لا يوجد سجل بعد</small>}
-                          </article>
-                        </div>
+                        <>
+                          <div className="performance-stats">
+                            <article className={previous ? "" : "muted"}>
+                              <span><TrendingUp size={15} /> آخر أداء</span>
+                              {previous ? <><b>{formatNumber(previous.set.weightKg)} <small>كغ</small> × {formatNumber(previous.set.reps)}</b><small className="stat-when">{daysAgoLabel(daysSince(previous.date))}</small></> : <small>أول مرة تسجل هذا التمرين</small>}
+                            </article>
+                            <article className={personalBest ? "pb" : "muted"}>
+                              <span><Sparkles size={15} /> أقوى أداء</span>
+                              {personalBest ? <b>{formatNumber(personalBest.weightKg)} <small>كغ</small> × {formatNumber(personalBest.reps)}</b> : <small>لا يوجد سجل بعد</small>}
+                            </article>
+                          </div>
+                          <section className="exercise-history-card compact" aria-label="التمارين السابقة لهذا التمرين">
+                            <div className="history-title"><span><History size={16} /> قبل هذه الحصة</span><small>{pastSummary.sessions ? `${countLabel(pastSummary.sessions, "حصة واحدة", "حصص")} · ${countLabel(pastSummary.reps, "عدة واحدة", "عدات")}` : "أول مرة"}</small></div>
+                            {pastSessions.length ? (
+                              <div className="history-table">
+                                <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
+                                {pastSessions.map((entry) => <div className="history-row" key={entry.id}><span>{formatDate(entry.date)}</span><b>{formatNumber(entry.setCount)}</b><b dir="ltr">{entry.repLabel}</b><b dir="ltr">{formatNumber(entry.maxWeight)} kg</b></div>)}
+                              </div>
+                            ) : <p className="history-empty">أول مرة تسجل هذا التمرين — أداء اليوم سيظهر هنا في المرة القادمة.</p>}
+                          </section>
+                        </>
                       );
                     })()}
                     {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
@@ -1990,7 +2034,7 @@ export default function Home() {
 
                 <div className="exercise-insights">
                   <article><span>أقوى مستوى</span>{exercisePersonalBest ? <><b>{formatNumber(exercisePersonalBest.reps)} عدة</b><strong dir="ltr">{formatNumber(exercisePersonalBest.weightKg)} kg</strong></> : <small>لا يوجد سجل</small>}</article>
-                  <article><span>آخر مرة</span>{daysSinceLastTrained !== null ? <b>{daysSinceLastTrained === 0 ? "اليوم" : `منذ ${formatNumber(daysSinceLastTrained)} يوم`}</b> : <small>لا يوجد سجل</small>}<History size={18} /></article>
+                  <article><span>آخر مرة</span>{daysSinceLastTrained !== null ? <b>{daysAgoLabel(daysSinceLastTrained)}</b> : <small>لا يوجد سجل</small>}<History size={18} /></article>
                 </div>
 
                 <section className="exercise-history-card" aria-label="آخر أداء للتمرين">
