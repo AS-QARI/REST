@@ -34,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner, isSupabaseConfigured, loadOwnerSnapshot, saveOwnerSnapshot } from "./supabase";
@@ -244,6 +244,7 @@ function mergeLoopRepHistory(base: AppData): AppData {
 
 const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Arms", "Legs"] as const;
 type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
+const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = { Chest: "صدر", Back: "ظهر", Shoulders: "أكتاف", Arms: "ذراعين", Legs: "أرجل" };
 
 const BUILT_IN_EXERCISES: Exercise[] = [
   { id: "built-in-bench-press", name: "Bench Press", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 6, repMax: 12 },
@@ -290,6 +291,11 @@ function muscleGroupFor(value: string): MuscleGroup | null {
   if (/باي|تراي|ذراع|سواعد/.test(value)) return "Arms";
   if (/رجل|أرجل|فخذ|سمانة|بطات|ألوية/.test(value)) return "Legs";
   return null;
+}
+
+function muscleGroupLabel(value: string) {
+  const group = muscleGroupFor(value);
+  return group ? MUSCLE_GROUP_LABELS[group] : value;
 }
 
 function readNumericInput(value: string) {
@@ -571,12 +577,13 @@ function Sheet({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const titleId = useId();
   return (
     <div className="sheet-backdrop" role="presentation" onPointerDown={onClose}>
-      <section className="sheet" role="dialog" aria-modal="true" aria-label={title} onPointerDown={(event) => event.stopPropagation()}>
+      <section className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} onPointerDown={(event) => event.stopPropagation()}>
         <div className="sheet-handle" />
         <div className="sheet-header">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button className="icon-button" onClick={onClose} aria-label="إغلاق">
             <X size={20} />
           </button>
@@ -641,10 +648,12 @@ export default function Home() {
   const [equipmentSearch, setEquipmentSearch] = useState("");
   const [selectedExerciseId, setSelectedExerciseId] = useState("");
   const [setForm, setSetForm] = useState({ weightKg: "", reps: "", rir: "2", type: "working" as "working" | "warmup" });
+  const [setError, setSetError] = useState("");
   const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
-  const [selectedHistoryDate, setSelectedHistoryDate] = useState(() => new Date());
+  const [historyDateOverride, setHistoryDateOverride] = useState<Date | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
+  const [mealHistoryExpanded, setMealHistoryExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -738,10 +747,19 @@ export default function Home() {
       .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
       .map(([key, meals]) => ({ key, meals, calories: meals.reduce((sum, meal) => sum + meal.calories, 0) }));
   }, [data.meals]);
+  const visiblePastMealDays = mealHistoryExpanded ? pastMealDays : pastMealDays.slice(0, 3);
   const sortedSessions = useMemo(
     () => [...data.sessions].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()),
     [data.sessions],
   );
+  // First open of the log should land on something worth seeing: if today has no
+  // session but earlier ones exist, default to the most recent trained day instead
+  // of an empty "today". Any explicit pick by the user overrides this permanently.
+  const selectedHistoryDate = useMemo(() => {
+    if (historyDateOverride) return historyDateOverride;
+    if (sortedSessions.some((session) => isToday(session.completedAt))) return new Date();
+    return sortedSessions[0] ? new Date(sortedSessions[0].completedAt) : new Date();
+  }, [historyDateOverride, sortedSessions]);
   const workoutWeekDays = useMemo(() => {
     const start = new Date(selectedWorkoutDate);
     start.setHours(12, 0, 0, 0);
@@ -881,23 +899,10 @@ export default function Home() {
   // The session being logged is already reconciled into data.sessions, so anything
   // that should read as "before today" has to skip it by id — otherwise the card
   // just mirrors the set that was entered a moment ago.
-  const getExerciseHistorySummary = (exerciseId: string, before?: { id: string; date: string }) => {
-    let sessions = 0;
-    let reps = 0;
-    sortedSessions.forEach((session) => {
-      if (isAtOrAfter(session, before)) return;
-      const logged = session.exercises.find((item) => item.exerciseId === exerciseId);
-      if (!logged?.sets.length) return;
-      const working = logged.sets.filter((set) => set.type === "working");
-      sessions += 1;
-      reps += (working.length ? working : logged.sets).reduce((total, set) => total + set.reps, 0);
-    });
-    return { sessions, reps };
-  };
-  const getExercisePersonalBest = (exerciseId: string) => {
+  const getExercisePersonalBest = (exerciseId: string, before?: { id: string; date: string }) => {
     let best: SetLog | undefined;
     data.sessions.forEach((session) => session.exercises.forEach((exercise) => {
-      if (exercise.exerciseId !== exerciseId) return;
+      if (exercise.exerciseId !== exerciseId || isAtOrAfter(session, before)) return;
       exercise.sets.forEach((set) => {
         if (set.type === "working" && (!best || set.weightKg > best.weightKg)) best = set;
       });
@@ -935,17 +940,29 @@ export default function Home() {
   };
   const latestSetFor = (exerciseId: string) => latestPerformanceFor(exerciseId)?.set;
 
-  const activeExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === selectedExerciseId);
-  const activeExerciseMeta = exerciseCatalog.find((item) => item.id === selectedExerciseId);
+  // selectedExerciseId is empty right after a reload and can point at another day's
+  // exercise after switching days, so the day always falls back to its first exercise.
+  const currentExerciseId = data.activeWorkout?.exercises.some((item) => item.exerciseId === selectedExerciseId)
+    ? selectedExerciseId
+    : data.activeWorkout?.exercises[0]?.exerciseId ?? "";
+  // Everything framed as "before this session" measures against the session on screen.
+  const sessionCutoff = data.activeWorkout
+    ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt }
+    : undefined;
+  const activeExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === currentExerciseId);
+  const activeExerciseMeta = exerciseCatalog.find((item) => item.id === currentExerciseId);
 
-  const openCompactSetSheet = () => {
-    if (!activeExerciseMeta) return;
-    const previous = latestSetFor(activeExerciseMeta.id);
+  const openCompactSetSheet = (exerciseId: string) => {
+    if (!exerciseCatalog.some((exercise) => exercise.id === exerciseId)) return;
+    setSelectedExerciseId(exerciseId);
+    const previous = latestSetFor(exerciseId);
     setSetForm({ weightKg: previous ? String(previous.weightKg) : "", reps: "", rir: "2", type: "working" });
+    setSetError("");
     setSheet("set");
   };
 
   const stepSetFormValue = (field: "weightKg" | "reps", amount: number) => {
+    setSetError("");
     setSetForm((current) => {
       const minimum = field === "reps" ? 1 : 0;
       const next = Math.max(minimum, (Number(current[field]) || 0) + amount);
@@ -1051,7 +1068,7 @@ export default function Home() {
       }
       setSignedIn(true);
     } catch {
-      setLoginError("تعذر الاتصال الآن. تحقق من الشبكة أو بيانات Supabase.");
+      setLoginError(supabaseConfigured ? "تعذر الاتصال الآن. تحقق من الشبكة." : "تعذر تسجيل الدخول. أعد المحاولة.");
     } finally {
       setLoginPending(false);
     }
@@ -1061,6 +1078,12 @@ export default function Home() {
     setEditingEquipmentId(null);
     setEquipmentForm({ name: "", primaryMuscle: "", type: "آلة", exerciseName: "", notes: "", photos: [] });
     setSheet(null);
+  };
+
+  const openTemplateSheet = () => {
+    setTemplateName("");
+    setTemplateExercises([]);
+    setSheet("template");
   };
 
   const openEquipmentSheet = (equipment?: Equipment) => {
@@ -1227,10 +1250,13 @@ export default function Home() {
 
   const saveSet = (event: FormEvent) => {
     event.preventDefault();
-    if (!data.activeWorkout || !activeExercise || !selectedExerciseId) return;
+    if (!data.activeWorkout || !activeExercise || !currentExerciseId) return;
     const weightKg = readNumericInput(setForm.weightKg);
     const reps = readNumericInput(setForm.reps);
-    if (weightKg === null || reps === null || reps < 1 || weightKg < 0) return;
+    if (weightKg === null || reps === null || reps < 1 || weightKg < 0) {
+      setSetError("أدخل وزنًا وعدد تكرارات صحيحين قبل الحفظ.");
+      return;
+    }
     const set: SetLog = {
       id: uid(),
       weightKg,
@@ -1242,7 +1268,7 @@ export default function Home() {
     const nextActive: ActiveWorkout = {
       ...data.activeWorkout,
       exercises: data.activeWorkout.exercises.map((item) =>
-        item.exerciseId === selectedExerciseId ? { ...item, sets: [...item.sets, set] } : item,
+        item.exerciseId === currentExerciseId ? { ...item, sets: [...item.sets, set] } : item,
       ),
     };
     persist({ ...data, activeWorkout: nextActive });
@@ -1340,6 +1366,32 @@ export default function Home() {
     setSheet("target");
   };
 
+  // A sheet should behave like a real dialog: keep the page behind it still and
+  // let keyboard users dismiss it without hunting for the close button.
+  useEffect(() => {
+    if (!sheet) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (sheet === "equipment") closeEquipmentSheet();
+      else if (sheet === "meal") closeMealSheet();
+      else if (sheet === "exercise") {
+        resetExerciseLogger();
+        setExerciseSearch("");
+        setSheet(null);
+      } else {
+        setSheet(null);
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [sheet]);
+
   if (!loaded) {
     return (
       <main className="loading-page" aria-live="polite">
@@ -1392,13 +1444,17 @@ export default function Home() {
               {loginPending ? "جارٍ الدخول…" : "دخول إلى رست"}
             </AppButton>
           </form>
-          <p className="local-note"><LockKeyhole size={14} /> {supabaseConfigured ? "Supabase مفعّل · نسخة محلية تعمل دون إنترنت" : "وضع محلي مؤقت إلى حين ربط Supabase"}</p>
+          <p className="local-note"><LockKeyhole size={14} /> {supabaseConfigured ? "Supabase مفعّل · نسخة محلية تعمل دون إنترنت" : "وضع محلي · بياناتك محفوظة على جهازك فقط"}</p>
         </section>
       </main>
     );
   }
 
   const todayWeekDays = lastSevenDays();
+  const weekDayKeys = new Set(todayWeekDays.map((day) => calendarDayKey(day)));
+  const weekSessions = sortedSessions.filter((session) => weekDayKeys.has(calendarDayKey(session.completedAt)));
+  const weekVolume = weekSessions.reduce((total, session) => total + workoutVolume(session.exercises), 0);
+  const lastTrainedDate = sortedSessions[0]?.completedAt;
   const nutritionRemaining = data.nutritionTarget.calories - nutrition.calories;
   const calorieBand = progressBand(nutrition.calories, data.nutritionTarget.calories);
   const hasNutritionTarget = Boolean(data.nutritionTarget.calories || data.nutritionTarget.protein || data.nutritionTarget.carbs || data.nutritionTarget.fat);
@@ -1434,13 +1490,17 @@ export default function Home() {
             <h2>{data.activeWorkout.name}</h2>
             <span>{countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
           </div>
-          <button className="round-action" onClick={() => setTab("workout")} aria-label="متابعة التمرين"><ChevronLeft size={22} /></button>
+          <button className="today-card-action" onClick={() => setTab("workout")}>
+            <span>تابع</span><ChevronLeft size={18} />
+          </button>
         </section>
       ) : (
         <section className="today-card today-workout-card">
           <div className="today-card-icon"><Dumbbell size={22} /></div>
           <div><p>تمرين اليوم</p><h2>لم تبدأ تمرينًا بعد</h2><span>سجّل مجموعاتك عندما تكون جاهزًا.</span></div>
-          <button className="round-action" onClick={() => startWorkout()} aria-label="ابدأ التمرين"><Plus size={21} /></button>
+          <button className="today-card-action" onClick={() => startWorkout()}>
+            <span>ابدأ</span><ArrowLeft size={18} />
+          </button>
         </section>
       )}
 
@@ -1457,8 +1517,28 @@ export default function Home() {
               : `${formatNumber(nutrition.calories)} kcal · ${formatNumber(nutrition.protein)} غ بروتين`}
           </span>
         </div>
-        <button className="round-action" onClick={() => openMealSheet()} aria-label="إضافة وجبة"><Plus size={21} /></button>
+        <button className="today-card-action secondary" onClick={() => openMealSheet()}>
+          <span>أضف</span><Plus size={18} />
+        </button>
       </section>
+
+      {sortedSessions.length > 0 && (
+        <section className="stat-row" aria-label="ملخص هذا الأسبوع">
+          <article><span>حصص الأسبوع</span><b>{formatNumber(weekSessions.length)}</b></article>
+          <article><span>حجم الأسبوع</span><b dir="ltr">{formatNumber(weekVolume)} <small>كغ</small></b></article>
+          <article><span>آخر تمرين</span><b>{lastTrainedDate ? (isToday(lastTrainedDate) ? "اليوم" : daysAgoLabel(daysSince(lastTrainedDate))) : "—"}</b></article>
+        </section>
+      )}
+
+      {personalRecords.length > 0 && (
+        <button type="button" className="insight-card today-insight" onClick={() => setTab("progress")}>
+          <Trophy size={20} aria-hidden="true" />
+          <div>
+            <h2>أقوى رقم مسجّل: {personalRecords[0].name}</h2>
+            <p dir="ltr">{formatNumber(personalRecords[0].weightKg)} kg × {formatNumber(personalRecords[0].reps)} <span dir="rtl">· {formatDate(personalRecords[0].date)}</span></p>
+          </div>
+        </button>
+      )}
     </>
   );
 
@@ -1467,11 +1547,12 @@ export default function Home() {
       <header className="page-heading">
         <div><p className="eyebrow">بلا جداول معقدة</p><h1>التمرين</h1></div>
         <button
-          className="icon-button surface"
+          className="header-action"
           onClick={() => setWorkoutView(workoutView === "equipment" ? "templates" : "equipment")}
           aria-label={workoutView === "equipment" ? "العودة للتمرين" : "إدارة المعدات"}
         >
-          {workoutView === "equipment" ? <ChevronLeft size={20} /> : <Settings2 size={20} />}
+          {workoutView === "equipment" ? <ChevronLeft size={18} /> : <Settings2 size={18} />}
+          <span>{workoutView === "equipment" ? "التمرين" : "المعدات"}</span>
         </button>
       </header>
 
@@ -1500,7 +1581,7 @@ export default function Home() {
           })}
         </div>
         {activeSetCount > 0 && (
-          <div className="workout-summary-metrics" aria-label="ملخص الحصة">
+          <div className="stat-row" aria-label="ملخص الحصة">
             <article><span>عدات</span><b>{formatNumber(activeRepCount)}</b></article>
             <article><span>جلسات</span><b>{formatNumber(activeSetCount)}</b></article>
             <article><span>الوزن المرفوع</span><b>{formatNumber(activeVolume)} <small>كغ</small></b></article>
@@ -1542,78 +1623,65 @@ export default function Home() {
                 <div className="exercise-tabs" aria-label="تمارين الحصة">
                   {data.activeWorkout.exercises.map((item) => {
                     const exercise = exerciseCatalog.find((entry) => entry.id === item.exerciseId);
-                    return exercise ? <button key={item.exerciseId} className={selectedExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)}</b></button> : null;
+                    const tabReps = item.sets.reduce((total, set) => total + set.reps, 0);
+                    return exercise ? <button key={item.exerciseId} className={currentExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)} {item.sets.length === 1 ? "جلسة" : "جلسات"}</b><b>{formatNumber(tabReps)} {tabReps === 1 ? "عدة" : "عدات"}</b></button> : null;
                   })}
                   <button className="add-exercise-tab" onClick={() => setSheet("exercise")} aria-label="إضافة تمرين"><Plus size={17} /></button>
                 </div>
-                {activeExerciseMeta && activeExercise && (
-                  <article className="exercise-log-card">
-                    <div className="exercise-log-title">
-                      <div><p className="eyebrow">{muscleGroupFor(activeExerciseMeta.primaryMuscle) ?? activeExerciseMeta.primaryMuscle} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}</p><h2>{activeExerciseMeta.name}</h2></div>
-                      <div className="exercise-log-actions">
-                        <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
-                        <Dumbbell size={22} />
+                {activeExerciseMeta && activeExercise && (() => {
+                  const loggedReps = activeExercise.sets.reduce((total, set) => total + set.reps, 0);
+                  const loggedVolume = activeExercise.sets.reduce((total, set) => total + set.weightKg * set.reps, 0);
+                  const previous = latestPerformanceFor(activeExerciseMeta.id, sessionCutoff);
+                  const personalBest = getExercisePersonalBest(activeExerciseMeta.id, sessionCutoff);
+                  return (
+                    <article className="exercise-log-card current workout-focus-card">
+                      <div className="exercise-log-title">
+                        <div><p className="eyebrow">{muscleGroupLabel(activeExerciseMeta.primaryMuscle)} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}<em className="current-flag">الحالي</em></p><h2>{activeExerciseMeta.name}</h2></div>
+                        <div className="exercise-log-actions">
+                          <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
+                          <Dumbbell size={22} />
+                        </div>
                       </div>
-                    </div>
-                    {(() => {
-                      // Skip the session on screen: "آخر أداء" and the log below are about
-                      // the workouts before this one, not the sets just entered.
-                      const cutoff = data.activeWorkout ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt } : undefined;
-                      const previous = latestPerformanceFor(activeExerciseMeta.id, cutoff);
-                      const personalBest = getExercisePersonalBest(activeExerciseMeta.id);
-                      const pastSummary = getExerciseHistorySummary(activeExerciseMeta.id, cutoff);
-                      const pastSessions = getExerciseHistory(activeExerciseMeta.id, cutoff);
-                      return (
-                        <>
-                          <div className="performance-stats">
-                            <article className={previous ? "" : "muted"}>
-                              <span><TrendingUp size={15} /> آخر أداء</span>
-                              {previous ? <><b>{formatNumber(previous.set.weightKg)} <small>كغ</small> × {formatNumber(previous.set.reps)}</b><small className="stat-when">{daysAgoLabel(daysSince(previous.date))}</small></> : <small>أول مرة تسجل هذا التمرين</small>}
-                            </article>
-                            <article className={personalBest ? "pb" : "muted"}>
-                              <span><Sparkles size={15} /> أقوى أداء</span>
-                              {personalBest ? <b>{formatNumber(personalBest.weightKg)} <small>كغ</small> × {formatNumber(personalBest.reps)}</b> : <small>لا يوجد سجل بعد</small>}
-                            </article>
+
+                      <section className="today-block" aria-label={`سجل اليوم · ${activeExerciseMeta.name}`}>
+                        <header><span>سجل اليوم</span></header>
+                        <div className="today-figures">
+                          <div><b>{formatNumber(activeExercise.sets.length)}</b><span>جلسات</span></div>
+                          <div><b>{formatNumber(loggedReps)}</b><span>عدات</span></div>
+                          <div><b>{formatNumber(loggedVolume)}</b><span>كغ</span></div>
+                        </div>
+                        {activeExercise.sets.length === 0 ? (
+                          <p className="no-sets">لم تسجّل مجموعة بعد — ابدأ بأول واحدة.</p>
+                        ) : (
+                          <div className="today-sets">
+                            {(() => {
+                              let workingIndex = 0;
+                              return activeExercise.sets.map((set) => {
+                                if (set.type === "working") workingIndex += 1;
+                                return (
+                                  <div className={`today-set${set.type === "warmup" ? " is-warmup" : ""}`} key={set.id}>
+                                    <span>{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
+                                    <b dir="ltr">{formatNumber(set.weightKg)} <small>كغ</small></b>
+                                    <b dir="ltr">× {formatNumber(set.reps)}</b>
+                                    <small>RIR {set.rir ?? "—"}</small>
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
-                          <section className="exercise-history-card compact" aria-label="التمارين السابقة لهذا التمرين">
-                            <div className="history-title"><span><History size={16} /> قبل هذه الحصة</span><small>{pastSummary.sessions ? `${countLabel(pastSummary.sessions, "حصة واحدة", "حصص")} · ${countLabel(pastSummary.reps, "عدة واحدة", "عدات")}` : "أول مرة"}</small></div>
-                            {pastSessions.length ? (
-                              <div className="history-table">
-                                <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
-                                {pastSessions.map((entry) => <div className="history-row" key={entry.id}><span>{formatDate(entry.date)}</span><b>{formatNumber(entry.setCount)}</b><b dir="ltr">{entry.repLabel}</b><b dir="ltr">{formatNumber(entry.maxWeight)} kg</b></div>)}
-                              </div>
-                            ) : <p className="history-empty">أول مرة تسجل هذا التمرين — أداء اليوم سيظهر هنا في المرة القادمة.</p>}
-                          </section>
-                        </>
-                      );
-                    })()}
-                    {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
-                    <div className="set-history" aria-label="مجموعات التمرين">
-                      {activeExercise.sets.length === 0 ? (
-                        <p className="no-sets">أضف أول مجموعة وستظهر كإنجاز بسيط هنا.</p>
-                      ) : (
-                        (() => {
-                          let workingIndex = 0;
-                          return activeExercise.sets.map((set) => {
-                            if (set.type === "working") workingIndex += 1;
-                            return (
-                              <article className="set-chip" key={set.id}>
-                                <span className="set-index">{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
-                                <b dir="ltr">{set.weightKg} <small>كغ</small></b>
-                                <b dir="ltr">× {set.reps}</b>
-                                <span>RIR {set.rir ?? "—"}</span>
-                              </article>
-                            );
-                          });
-                        })()
-                      )}
-                    </div>
-                    <div className="exercise-card-footer">
-                      <span>{countLabel(activeExercise.sets.length, "جلسة واحدة مسجلة", "جلسات مسجلة")}</span>
-                      <button type="button" onClick={openCompactSetSheet}><Plus size={16} /> إضافة جلسة</button>
-                    </div>
-                  </article>
-                )}
+                        )}
+                        <button type="button" className="add-set-wide" onClick={() => openCompactSetSheet(activeExerciseMeta.id)}><Plus size={16} /> إضافة جلسة</button>
+                      </section>
+
+                      {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
+                      <div className="focus-history-line" aria-label="ملخص أداء التمرين السابق">
+                        <span><History size={14} /> {previous ? `آخر أداء: ${formatNumber(previous.set.weightKg)} كغ × ${formatNumber(previous.set.reps)} · ${daysAgoLabel(daysSince(previous.date))}` : "أول مرة تسجّل هذا التمرين"}</span>
+                        {personalBest && <span className="pb"><Sparkles size={14} /> أفضل: {formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</span>}
+                      </div>
+                    </article>
+                  );
+                })()}
+                <button type="button" className="stack-add-exercise" onClick={() => setSheet("exercise")}><Plus size={17} /> إضافة تمرين آخر</button>
               </>
             )
           ) : otherSessionsForDay.length === 0 ? (
@@ -1627,21 +1695,26 @@ export default function Home() {
       </section>
       )}
 
-      {workoutView === "templates" && !data.activeWorkout && data.templates.length > 0 && (
+      {workoutView === "templates" && !data.activeWorkout && (
         <section className="section-block">
           <div className="section-title">
             <div><p className="eyebrow">قوالبك</p><h2>ابدأ من قالب</h2></div>
+            <button className="text-action" onClick={openTemplateSheet}><Plus size={17} /> قالب جديد</button>
           </div>
-          <div className="template-list">
-            {data.templates.map((template) => (
-              <article className="template-card" key={template.id}>
-                <div className="template-symbol"><ClipboardList size={22} /></div>
-                <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
-                <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
-                <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
-              </article>
-            ))}
-          </div>
+          {data.templates.length === 0 ? (
+            <EmptyState icon={<ClipboardList size={27} />} title="ثبّت روتينك المعتاد" body="احفظ تمارينك المتكررة في قالب، ثم ابدأها بخطوة واحدة." action={<AppButton onClick={openTemplateSheet} icon={<Plus size={18} />}>إنشاء قالب</AppButton>} />
+          ) : (
+            <div className="template-list">
+              {data.templates.map((template) => (
+                <article className="template-card" key={template.id}>
+                  <div className="template-symbol"><ClipboardList size={22} /></div>
+                  <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
+                  <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
+                  <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -1660,7 +1733,7 @@ export default function Home() {
                 <input value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="ابحث في أجهزتك" aria-label="ابحث في أجهزتك" />
               </label>
               <div className="filter-rail" role="group" aria-label="المجموعات العضلية" dir="ltr">
-                {(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={equipmentMuscleGroup === group ? "selected" : ""} onClick={() => setEquipmentMuscleGroup(group)}>{group === "All" ? "الكل" : group}</button>)}
+                {(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={equipmentMuscleGroup === group ? "selected" : ""} onClick={() => setEquipmentMuscleGroup(group)}>{group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}</button>)}
               </div>
               {filteredEquipment.length === 0 ? (
                 <div className="library-empty"><Search size={20} /><span>لا توجد أجهزة مطابقة</span></div>
@@ -1691,7 +1764,7 @@ export default function Home() {
     <>
       <header className="page-heading">
         <div><p className="eyebrow">سجل يدوي واضح</p><h1>التغذية</h1></div>
-        <button className="icon-button surface" onClick={openTargetSheet} aria-label="ضبط أهداف التغذية"><Target size={20} /></button>
+        <button className="header-action" onClick={openTargetSheet} aria-label="ضبط أهداف التغذية"><Target size={18} /><span>الأهداف</span></button>
       </header>
       <section className="nutrition-summary">
         <div className={`calorie-ring${data.nutritionTarget.calories ? "" : " empty"}${calorieBand.tone ? ` ${calorieBand.tone}` : ""}`} style={{ "--progress": `${calorieBand.width}%` } as React.CSSProperties}>
@@ -1734,7 +1807,7 @@ export default function Home() {
       {pastMealDays.length > 0 && (
         <section className="section-block">
           <div className="section-title"><div><p className="eyebrow">سجلك الغذائي</p><h2>أيام سابقة</h2></div></div>
-          {pastMealDays.map((day) => (
+          {visiblePastMealDays.map((day) => (
             <div className="day-group" key={day.key}>
               <div className="day-group-head"><span>{formatDayHeading(day.meals[0].createdAt)}</span><b>{formatNumber(day.calories)} kcal</b></div>
               <div className="meal-list">
@@ -1750,6 +1823,12 @@ export default function Home() {
               </div>
             </div>
           ))}
+          {pastMealDays.length > 3 && (
+            <button type="button" className="history-reveal" onClick={() => setMealHistoryExpanded((expanded) => !expanded)}>
+              {mealHistoryExpanded ? "عرض أحدث 3 أيام فقط" : `عرض ${formatNumber(pastMealDays.length - 3)} أيام أقدم`}
+              <ChevronDown className={mealHistoryExpanded ? "is-open" : ""} size={17} />
+            </button>
+          )}
         </section>
       )}
     </>
@@ -1777,10 +1856,10 @@ export default function Home() {
         {calendarExpanded && (
           <div className="month-calendar-body">
             <div className="month-calendar-head">
-              <button type="button" onClick={() => setSelectedHistoryDate((date) => shiftMonth(date, -1))} aria-label="الشهر السابق"><ChevronRight size={19} /></button>
+              <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, -1))} aria-label="الشهر السابق"><ChevronRight size={19} /></button>
               <strong>{historyMonthLabel}</strong>
-              <button type="button" onClick={() => setSelectedHistoryDate((date) => shiftMonth(date, 1))} aria-label="الشهر التالي"><ChevronLeft size={19} /></button>
-              <button type="button" className="today-jump" onClick={() => { setSelectedHistoryDate(new Date()); setExpandedSessionId(null); setCalendarExpanded(false); }}>اليوم</button>
+              <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, 1))} aria-label="الشهر التالي"><ChevronLeft size={19} /></button>
+              <button type="button" className="today-jump" onClick={() => { setHistoryDateOverride(new Date()); setExpandedSessionId(null); setCalendarExpanded(false); }}>اليوم</button>
             </div>
 
             <div className="month-weekdays" aria-hidden="true">
@@ -1799,7 +1878,7 @@ export default function Home() {
                     type="button"
                     key={key}
                     className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${trained ? " trained" : ""}`}
-                    onClick={() => { setSelectedHistoryDate(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
+                    onClick={() => { setHistoryDateOverride(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
                     aria-pressed={selected}
                     aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}`}
                   >
@@ -1929,7 +2008,7 @@ export default function Home() {
         </div>
         <button className="icon-button surface" onClick={logout} aria-label="تسجيل الخروج"><LogOut size={18} /></button>
       </div>
-      <div className={`page-content view-${tab} view-${workoutView}`}>{content}</div>
+      <div className={`page-content view-${tab} view-${workoutView}${data.activeWorkout ? " workout-active" : ""}`}>{content}</div>
       <nav className="bottom-nav" aria-label="التنقل الرئيسي">
         {NAVIGATION.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={20} /><span>{label}</span></button>)}
       </nav>
@@ -2003,7 +2082,7 @@ export default function Home() {
         </Sheet>
       )}
 
-      {sheet === "template" && <Sheet title="إنشاء جدولك" onClose={() => setSheet(null)}><form className="form-stack sheet-form" onSubmit={saveTemplate}><label><span>اسم الجدول <b>*</b></span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="اكتب الاسم الذي يناسبك" autoFocus /></label><fieldset className="exercise-picker"><legend>اختر التمارين <em>اختياري</em></legend>{data.exercises.length === 0 ? <p className="form-hint">أضف جهازًا وتمرينًا أولًا، أو أنشئ الجدول فارغًا وأكمله لاحقًا.</p> : data.exercises.map((exercise) => <label key={exercise.id} className="check-row"><input type="checkbox" checked={templateExercises.includes(exercise.id)} onChange={(event) => setTemplateExercises(event.target.checked ? [...templateExercises, exercise.id] : templateExercises.filter((id) => id !== exercise.id))} /><span>{exercise.name}</span><small>{exercise.primaryMuscle}</small></label>)}</fieldset><AppButton type="submit" icon={<Check size={18} />}>حفظ الجدول</AppButton></form></Sheet>}
+      {sheet === "template" && <Sheet title="إنشاء جدولك" onClose={() => setSheet(null)}><form className="form-stack sheet-form" onSubmit={saveTemplate}><label><span>اسم الجدول <b>*</b></span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="اكتب الاسم الذي يناسبك" autoFocus /></label><fieldset className="exercise-picker"><legend>اختر التمارين <em>اختياري</em></legend><p className="form-hint">اختر من التمارين الجاهزة أو تمارينك التي أضفتها. يمكنك تعديل القالب لاحقًا.</p>{exerciseCatalog.map((exercise) => <label key={exercise.id} className="check-row"><input type="checkbox" checked={templateExercises.includes(exercise.id)} onChange={(event) => setTemplateExercises(event.target.checked ? [...templateExercises, exercise.id] : templateExercises.filter((id) => id !== exercise.id))} /><span>{exercise.name}</span><small>{exercise.primaryMuscle}</small></label>)}</fieldset><AppButton type="submit" disabled={!templateName.trim()} icon={<Check size={18} />}>حفظ الجدول</AppButton></form></Sheet>}
 
       {sheet === "exercise" && (
         <Sheet title={`تسجيل تمرين · ${formatDate(selectedWorkoutDate.toISOString())}`} onClose={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); }}>
@@ -2018,17 +2097,17 @@ export default function Home() {
 
             {!exerciseDraftMeta ? (
               <>
-                <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية" dir="ltr">{(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>{group === "All" ? "الكل" : group}</button>)}</div>
-                <div className="exercise-choice-heading"><span>{selectedMuscleGroup === "All" ? "كل التمارين" : `${selectedMuscleGroup} Exercises`}</span><small>{formatNumber(exercisesInSelectedGroup.length)} تمارين</small></div>
+                <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية" dir="ltr">{(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>{group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}</button>)}</div>
+                <div className="exercise-choice-heading"><span>{selectedMuscleGroup === "All" ? "كل التمارين" : `تمارين ${MUSCLE_GROUP_LABELS[selectedMuscleGroup]}`}</span><small>{formatNumber(exercisesInSelectedGroup.length)} تمارين</small></div>
                 {exercisesInSelectedGroup.length === 0 ? <div className="library-empty"><Search size={20} /><span>لا توجد تمارين مطابقة</span></div> : (
-                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); const stats = exerciseStatsById.get(exercise.id); const lastGap = stats ? daysSince(stats.lastDate) : null; return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupFor(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} reps</small>{stats ? <span className="picker-stats"><span>{countLabel(stats.sessions, "جلسة واحدة", "جلسات")}</span><span>{countLabel(stats.reps, "عدة واحدة", "عدات")}</span><span className="picker-last" dir="ltr">{formatNumber(stats.lastWeightKg)} kg × {formatNumber(stats.lastReps)}</span>{lastGap !== null && <span className="picker-when">{daysAgoLabel(lastGap)}</span>}</span> : <span className="picker-stats empty">لم تتمرن عليه بعد</span>}</span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
+                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); const stats = exerciseStatsById.get(exercise.id); const lastGap = stats ? daysSince(stats.lastDate) : null; return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupLabel(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} عدة</small>{stats ? <span className="picker-stats"><span>{countLabel(stats.sessions, "جلسة واحدة", "جلسات")}</span><span>{countLabel(stats.reps, "عدة واحدة", "عدات")}</span><span className="picker-last" dir="ltr">{formatNumber(stats.lastWeightKg)} kg × {formatNumber(stats.lastReps)}</span>{lastGap !== null && <span className="picker-when">{daysAgoLabel(lastGap)}</span>}</span> : <span className="picker-stats empty">لم تتمرن عليه بعد</span>}</span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
                 )}
               </>
             ) : (
               <div className="exercise-logger">
                 <div className="selected-exercise-strip">
                   <span className="selected-equipment-thumb">{exerciseDraftEquipment?.photos?.length ? <img src={exerciseDraftEquipment.photos[0]} alt="" /> : <Dumbbell size={19} />}</span>
-                  <div><strong>{exerciseDraftMeta.name}</strong><small>{muscleGroupFor(exerciseDraftMeta.primaryMuscle)}</small></div>
+                  <div><strong>{exerciseDraftMeta.name}</strong><small>{muscleGroupLabel(exerciseDraftMeta.primaryMuscle)}</small></div>
                   <button type="button" onClick={resetExerciseLogger} aria-label="إلغاء اختيار التمرين"><X size={17} /></button>
                 </div>
 
@@ -2078,7 +2157,7 @@ export default function Home() {
             <div className="set-exercise-banner">
               <span className="set-exercise-icon"><Dumbbell size={19} /></span>
               <div><small>التمرين الحالي</small><strong>{activeExerciseMeta?.name}</strong></div>
-              <b>{activeExerciseMeta ? muscleGroupFor(activeExerciseMeta.primaryMuscle) : ""}</b>
+              <b>{activeExerciseMeta ? muscleGroupLabel(activeExerciseMeta.primaryMuscle) : ""}</b>
             </div>
 
             <div className="set-metrics-grid">
@@ -2086,7 +2165,7 @@ export default function Home() {
                 <span>الوزن <small>kg</small></span>
                 <div className="set-sheet-stepper" dir="ltr">
                   <button type="button" onClick={() => stepSetFormValue("weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={17} /></button>
-                  <input value={setForm.weightKg} onChange={(event) => setSetForm({ ...setForm, weightKg: event.target.value })} type="text" inputMode="decimal" placeholder="0" autoFocus aria-label="الوزن بالكيلوغرام" />
+                  <input value={setForm.weightKg} onChange={(event) => { setSetError(""); setSetForm({ ...setForm, weightKg: event.target.value }); }} type="text" inputMode="decimal" placeholder="0" autoFocus aria-label="الوزن بالكيلوغرام" />
                   <button type="button" onClick={() => stepSetFormValue("weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={17} /></button>
                 </div>
               </label>
@@ -2094,7 +2173,7 @@ export default function Home() {
                 <span>التكرارات <small>reps</small></span>
                 <div className="set-sheet-stepper" dir="ltr">
                   <button type="button" onClick={() => stepSetFormValue("reps", -1)} aria-label="إنقاص التكرارات"><Minus size={17} /></button>
-                  <input value={setForm.reps} onChange={(event) => setSetForm({ ...setForm, reps: event.target.value })} type="text" inputMode="numeric" placeholder="8" aria-label="عدد التكرارات" />
+                  <input value={setForm.reps} onChange={(event) => { setSetError(""); setSetForm({ ...setForm, reps: event.target.value }); }} type="text" inputMode="numeric" placeholder="8" aria-label="عدد التكرارات" />
                   <button type="button" onClick={() => stepSetFormValue("reps", 1)} aria-label="زيادة التكرارات"><Plus size={17} /></button>
                 </div>
               </label>
@@ -2115,6 +2194,7 @@ export default function Home() {
               </div>
             </fieldset>
 
+            {setError && <p className="form-error" role="alert">{setError}</p>}
             <button type="submit" className="set-save-button"><Check size={19} /> حفظ الجلسة</button>
           </form>
         </Sheet>
