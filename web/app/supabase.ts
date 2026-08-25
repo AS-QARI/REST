@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { sha256Hex } from "./sha256";
 
 const OWNER_USERNAME = "OREZ";
 const OWNER_AUTH_EMAIL = "orez@rest.invalid";
@@ -21,10 +22,13 @@ function getSupabaseClient() {
 }
 
 async function localPasswordMatches(password: string) {
-  const bytes = new TextEncoder().encode(password);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const hashed = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return hashed === LOCAL_PASSWORD_HASH;
+  if (crypto.subtle) {
+    const bytes = new TextEncoder().encode(password);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const hashed = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return hashed === LOCAL_PASSWORD_HASH;
+  }
+  return sha256Hex(password) === LOCAL_PASSWORD_HASH;
 }
 
 export async function authenticateOwner(username: string, password: string): Promise<{ ok: boolean; message: string }> {

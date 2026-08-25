@@ -58,10 +58,11 @@
 /* ============================================================
    Base / reset
    ============================================================ */
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { min-height: 100%; background: var(--canvas-deep); }
 body { min-height: 100%; margin: 0; background: var(--canvas-deep); color: var(--ink); letter-spacing: -.012em; font-family: var(--font-arabic), "SF Arabic", "Geeza Pro", Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input, select, textarea { font: inherit; }
+button, a { touch-action: manipulation; }
 button { border: 0; cursor: pointer; background: transparent; color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent-glow); outline-offset: 2px; }
 .eyebrow { margin: 0; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
@@ -254,11 +255,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workout-day-rail button.selected i { background: var(--accent-ink); }
 .workout-day-rail button:active { transform: scale(.94); }
 
-.workout-summary-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 12px; }
-.workout-summary-metrics article { padding: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(255,255,255,.025); text-align: center; }
-.workout-summary-metrics span { display: block; color: var(--subtle); font-size: 10px; }
-.workout-summary-metrics b { display: block; margin-top: 3px; color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
-.workout-summary-metrics b small { color: var(--accent); font-size: 10px; }
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 12px; }
+.stat-row article { padding: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(255,255,255,.025); text-align: center; }
+.stat-row span { display: block; color: var(--subtle); font-size: 10px; }
+.stat-row b { display: block; margin-top: 3px; color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
+.stat-row b small { color: var(--accent); font-size: 10px; }
 
 .workout-day-log { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .workout-day-log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
@@ -318,47 +319,48 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .exercise-tabs { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 9px; scrollbar-width: none; }
 .exercise-tabs::-webkit-scrollbar { display: none; }
-.exercise-tabs button { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; max-width: 156px; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--muted); background: var(--surface); font-size: 12px; }
+.exercise-tabs button { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; max-width: 260px; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--muted); background: var(--surface); font-size: 12px; }
 .exercise-tabs button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.exercise-tabs button b { display: grid; place-items: center; flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--r-pill); color: var(--subtle); background: var(--surface-soft); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.exercise-tabs button b { display: grid; place-items: center; flex: 0 0 auto; height: 20px; padding: 0 7px; border-radius: var(--r-pill); color: var(--subtle); background: var(--surface-soft); font-size: 9px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .exercise-tabs button.selected { border-color: rgba(31,79,191,.55); color: var(--accent); background: var(--accent-wash); }
 .exercise-tabs button.selected b { color: var(--accent-ink); background: var(--accent); }
 .exercise-tabs button.add-exercise-tab { display: grid; place-items: center; padding: 0; width: 39px; color: var(--accent-ink); background: var(--accent); border-color: transparent; }
 
 .exercise-log-card { padding: 13px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.exercise-log-card.current { border-color: rgba(31,79,191,.5); background: linear-gradient(160deg, var(--accent-wash), var(--surface) 62%); }
+.current-flag { margin-inline-start: 7px; padding: 1px 7px; border-radius: var(--r-pill); color: var(--accent-ink); background: var(--accent); font-size: 9px; font-style: normal; font-weight: 700; }
+/* "سجل اليوم" is the point of the screen: it leads every card, and the past
+   record sits underneath it rather than on top of it. */
+.today-block { margin-top: 10px; padding: 10px; border-radius: var(--r-md); background: var(--canvas); }
+.today-block > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 22px; }
+.today-block > header > span { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .01em; }
+.today-block > header button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: var(--r-pill); color: var(--ink-dim); background: var(--surface-soft); font-size: 10px; font-weight: 600; }
+.today-block > header button svg { color: var(--accent); }
+.today-figures { display: grid; grid-template-columns: repeat(3, 1fr); margin: 8px 0 9px; }
+.today-figures > div { display: grid; gap: 1px; justify-items: center; padding: 2px 0; border-inline-start: 1px solid var(--line); }
+.today-figures > div:first-child { border-inline-start: 0; }
+.today-figures b { color: var(--ink); font-size: 19px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.today-figures span { color: var(--subtle); font-size: 9px; font-weight: 600; }
+.exercise-log-card.current .today-figures b { color: var(--accent-ink); }
+.today-sets { display: grid; gap: 4px; margin-bottom: 9px; }
+.today-set { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px; background: var(--surface-soft); animation: set-in .22s ease; }
+.today-set.is-warmup { border: 1px dashed var(--line-strong); background: transparent; }
+.today-set > span { color: var(--muted); font-size: 11px; }
+.today-set b { color: var(--ink); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.today-set b small { color: var(--subtle); font-size: 9px; font-weight: 500; }
+.today-set > small { color: var(--subtle); font-size: 9px; font-weight: 600; }
+.add-set-wide { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 38px; border-radius: 11px; color: var(--accent-ink); background: var(--accent); font-size: 12px; font-weight: 700; }
+.stack-add-exercise { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); color: var(--ink-dim); font-size: 12px; font-weight: 600; }
+.stack-add-exercise svg { color: var(--accent); }
 .exercise-log-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .exercise-log-title h2 { margin: 3px 0 0; font-size: 18px; }
 .exercise-log-actions { display: flex; align-items: center; gap: 10px; }
 .exercise-log-actions > svg { color: var(--accent); }
-.performance-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 9px 0; }
-.performance-stats article { padding: 9px 10px; border-radius: var(--r-sm); background: var(--surface-soft); }
-.performance-stats span { display: flex; align-items: center; gap: 5px; color: var(--blue); font-size: 11px; font-weight: 600; }
-.performance-stats span svg { flex: 0 0 auto; }
-.performance-stats b { display: block; margin-top: 6px; color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
-.performance-stats b small { color: var(--subtle); font-size: 10px; }
-.performance-stats small { display: block; margin-top: 6px; color: var(--subtle); font-size: 11px; line-height: 1.4; }
-.performance-stats article.pb { background: var(--accent-wash); }
-.performance-stats article.pb span { color: var(--accent); }
-.performance-stats article.muted span { color: var(--subtle); }
-.performance-stats .stat-when { margin-top: 3px; font-size: 10px; }
-.exercise-history-card.compact { margin: 0 0 11px; }
-.exercise-history-card.compact .history-title { min-height: 34px; }
 
 .exercise-note-callout { margin: -6px 0 13px; padding: 9px 11px; border-inline-start: 2px solid var(--accent); border-radius: 8px; color: var(--muted); background: var(--surface-soft); font-size: 11px; line-height: 1.65; }
 
-.set-history { display: grid; gap: 5px; margin: 9px 0; }
-.set-chip { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-soft); animation: set-in .22s ease; }
-.set-chip.is-warmup { border-style: dashed; }
-.set-chip .set-index { color: var(--muted); font-size: 12px; }
-.set-chip b { color: var(--ink); font-size: 14px; }
-.set-chip b small, .set-chip > span:last-child { color: var(--subtle); font-size: 10px; font-weight: 600; }
-.set-chip.is-pr { border-color: rgba(31,79,191,.5); background: var(--accent-wash); }
-.set-chip.is-pr .set-index { color: var(--accent); }
 @keyframes set-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .no-sets { margin: 0; padding: 12px; color: var(--muted); font-size: 11px; text-align: center; border: 1px dashed var(--line); border-radius: var(--r-sm); background: rgba(255,255,255,.02); }
-.exercise-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 35px; padding-top: 2px; }
-.exercise-card-footer > span { color: var(--subtle); font-size: 10px; }
-.exercise-card-footer button { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 11px; border-radius: var(--r-pill); color: var(--accent-ink); background: var(--accent); font-size: 11px; font-weight: 700; }
 
 /* ============================================================
    Nutrition tab
@@ -375,7 +377,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .calorie-ring > div { display: grid; place-content: center; width: 103px; height: 103px; border-radius: 50%; background: var(--surface); text-align: center; }
 .calorie-ring span, .calorie-ring small { color: var(--muted); font-size: 10px; }
 .calorie-ring strong { margin: 2px 0; font-size: 22px; }
-.calorie-ring.empty { background: transparent; border: 2px dashed var(--line-strong); }
+.calorie-ring.empty { background: transparent; border: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--line-strong)); }
+.calorie-ring.empty strong { color: color-mix(in srgb, var(--accent) 45%, var(--ink)); }
 .calorie-ring.empty > div { background: transparent; }
 .macro-summary h2 { margin: 6px 0 5px; font-size: 18px; line-height: 1.45; }
 .macro-summary .text-action { padding-bottom: 0; }
@@ -389,17 +392,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .macro-card > div:first-child { display: grid; gap: 2px; }
 .macro-card span { color: var(--muted); font-size: 11px; }
 .macro-card .macro-label { display: flex; align-items: center; gap: 5px; }
-.macro-card .macro-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--macro-hue, var(--accent)); }
+.macro-card .macro-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--macro-hue, var(--accent)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--macro-hue) 16%, transparent), 0 0 8px color-mix(in srgb, var(--macro-hue) 55%, transparent); }
 .macro-card.protein { --macro-hue: var(--accent); }
 .macro-card.carbs { --macro-hue: var(--blue); }
 .macro-card.fat { --macro-hue: var(--sand); }
-.macro-card b { font-size: 14px; }
+.macro-card b { font-size: 14px; color: var(--ink); }
+.macro-card .macro-label { color: color-mix(in srgb, var(--macro-hue) 55%, var(--muted)); font-weight: 600; }
 .macro-card small { display: block; margin-top: 7px; color: var(--subtle); font-size: 10px; }
 .macro-card small .macro-pct { color: var(--tone); font-weight: 700; font-variant-numeric: tabular-nums; }
 .macro-track { height: 6px; overflow: hidden; margin-top: 10px; border-radius: var(--r-pill); background: var(--track); transition: background-color .35s ease; }
 .macro-card.low .macro-track, .macro-card.mid .macro-track, .macro-card.hit .macro-track, .macro-card.over .macro-track { background: color-mix(in srgb, var(--tone) 24%, transparent); }
 .macro-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--tone); transition: width .35s ease, background-color .35s ease; }
 .macro-card.low .macro-track span, .macro-card.mid .macro-track span, .macro-card.hit .macro-track span, .macro-card.over .macro-track span { min-width: 5px; }
+.macro-card:not(.low):not(.mid):not(.hit):not(.over) .macro-track { background-color: color-mix(in srgb, var(--macro-hue) 10%, transparent); background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--macro-hue) 34%, transparent) 0 5px, transparent 5px 10px); animation: macro-rail-drift 2.4s linear infinite; }
+@keyframes macro-rail-drift { from { background-position: 0 0; } to { background-position: 14.142px 0; } }
 .progress-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 9px 2px 0; padding: 0; list-style: none; }
 .progress-legend li { display: flex; align-items: center; gap: 5px; color: var(--subtle); font-size: 10px; }
 .progress-legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
@@ -503,7 +509,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .recovery-icon { display: grid; place-items: center; flex: 0 0 auto; width: 45px; height: 45px; border-radius: var(--r-sm); color: var(--lavender); background: rgba(198,164,234,.14); }
 .recovery-card h2 { margin: 3px 0; font-size: 17px; }
 .recovery-card span { color: var(--muted); font-size: 12px; line-height: 1.5; }
-.insight-card { display: flex; gap: 12px; align-items: flex-start; padding: 17px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.insight-card { display: flex; width: 100%; gap: 12px; align-items: flex-start; padding: 17px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; transition: border-color .16s ease; }
+.insight-card:hover, .insight-card:focus-visible { border-color: var(--line-strong); }
 .insight-card svg { flex: 0 0 auto; color: var(--accent); }
 .insight-card h2 { margin: 0; font-size: 16px; }
 .insight-card p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
@@ -542,8 +549,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ============================================================
    Bottom sheets (floating glass panel, concentric radii)
    ============================================================ */
-.sheet-backdrop { position: fixed; z-index: 20; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.6); }
-.sheet { width: 100%; max-height: min(87dvh, 760px); overflow-y: auto; padding: 8px 19px calc(24px + env(safe-area-inset-bottom)); border: 1px solid var(--glass-border); border-bottom: 0; border-radius: var(--r-xl) var(--r-xl) 0 0; background: var(--surface-raised); box-shadow: 0 -20px 60px rgba(0,0,0,.4); }
+.sheet-backdrop { position: fixed; z-index: 20; inset: 0; display: flex; align-items: flex-end; background: rgba(0,0,0,.6); overscroll-behavior: contain; }
+.sheet { width: 100%; max-height: min(87dvh, 760px); overflow-y: auto; overscroll-behavior: contain; padding: 8px 19px calc(24px + env(safe-area-inset-bottom)); border: 1px solid var(--glass-border); border-bottom: 0; border-radius: var(--r-xl) var(--r-xl) 0 0; background: var(--surface-raised); box-shadow: 0 -20px 60px rgba(0,0,0,.4); }
 .sheet-handle { width: 38px; height: 4px; margin: 0 auto 14px; border-radius: var(--r-pill); background: var(--line-strong); }
 .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 19px; }
 .sheet-header h2 { margin: 0; font-size: 21px; }
@@ -722,7 +729,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .exercise-tabs button { min-height: 33px; font-size: 10px; }
   .exercise-log-card { padding: 11px; border-radius: 17px; }
   .exercise-log-title h2 { font-size: 16px; }
-  .set-chip { padding: 7px 9px; border-radius: 10px; }
+  .today-set { padding: 7px 9px; border-radius: 9px; }
 
   .nutrition-summary { gap: 13px; padding: 13px; border-radius: 21px; }
   .calorie-ring { width: 96px; height: 96px; }
@@ -773,7 +780,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .icon-button.surface { border: 0; background: var(--surface); }
 .form-stack label { color: var(--ink-dim); font-weight: 500; }
 .form-stack input, .form-stack select, .form-stack textarea { min-height: 50px; border-color: transparent; border-radius: var(--r-md); background: var(--surface-soft); }
-.form-stack input:focus, .form-stack select:focus, .form-stack textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.form-stack input:focus-visible, .form-stack select:focus-visible, .form-stack textarea:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 .app-shell { padding-inline: 16px; background: var(--canvas-deep); }
 .app-top { min-height: 44px; margin-bottom: 2px; }
@@ -812,12 +819,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .day-group .meal-list { margin-bottom: 18px; }
 .start-mini { border-radius: var(--r-pill); font-weight: 600; }
 
-.exercise-log-card, .set-chip { border-color: transparent; background: var(--surface); }
-.set-chip { background: var(--surface-soft); }
+.exercise-log-card { border-color: transparent; background: var(--surface); }
+.today-block { background: var(--surface-raised); }
+.today-set { background: var(--surface-soft); }
 
 .nutrition-summary { border: 0; background: var(--surface); }
 .calorie-ring > div { background: var(--surface); }
-.macro-card { border: 0; background: var(--surface); }
+.macro-card { border: 0; background: linear-gradient(158deg, color-mix(in srgb, var(--macro-hue) 14%, var(--surface)) 0%, var(--surface) 58%); }
 .macro-card b, .calorie-ring strong, .meal-card strong { font-variant-numeric: tabular-nums; }
 
 .bottom-nav {
@@ -870,7 +878,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .muscle-group-grid.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
 .muscle-group-grid.compact button { min-height: 38px; padding: 0 7px; font-size: 11px; }
 .muscle-group-grid.compact button:last-child { grid-column: auto; }
-.exercise-choice-list { display: grid; gap: 1px; max-height: 310px; overflow-y: auto; border-radius: var(--r-lg); background: var(--line); }
+.exercise-choice-list { display: grid; gap: 1px; max-height: 310px; overflow-y: auto; overscroll-behavior: contain; border-radius: var(--r-lg); background: var(--line); }
 .exercise-choice-list button { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--surface-soft); text-align: left; }
 .exercise-choice-list button span { display: grid; gap: 3px; }
 .exercise-choice-list button strong { font-size: 14px; font-weight: 600; }
@@ -888,7 +896,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .compact-link { min-height: 43px; padding-inline: 12px; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--line); }
 .compact-link span { white-space: nowrap; }
 .exercise-session-form .exercise-filter { margin: -1px 0 0; }
-.exercise-picker-list { display: grid; max-height: 330px; overflow-y: auto; border-radius: var(--r-lg); background: var(--canvas); }
+.exercise-picker-list { display: grid; max-height: 330px; overflow-y: auto; overscroll-behavior: contain; border-radius: var(--r-lg); background: var(--canvas); }
 .exercise-picker-list > button { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 72px; padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: start; }
 .exercise-picker-list > button:last-child { border-bottom: 0; }
 .exercise-picker-list > button > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
@@ -969,7 +977,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .today-actions .quick-actions button:first-child,
 .start-mini,
 .exercise-tabs button.add-exercise-tab,
-.exercise-card-footer button,
+.add-set-wide,
 .set-exercise-icon,
 .set-save-button,
 .meal-save-button,
@@ -1018,4 +1026,104 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .macro-track { animation: none !important; }
+}
+
+/* ============================================================
+   UX density pass — preserve legibility while keeping the key action in view
+   ============================================================ */
+.daily-heading { padding: 14px 2px 9px; }
+.daily-heading h1 { margin: 6px 0 4px; max-width: none; font-size: clamp(32px, 8vw, 42px); line-height: 1.08; }
+.daily-heading p { font-size: 12px; line-height: 1.5; }
+.today-week-strip { gap: 4px; margin-top: 5px; }
+.today-week-day { gap: 2px; min-height: 46px; padding: 6px 2px; }
+.today-week-day span { font-size: 9px; }
+.today-week-day b { font-size: 12px; }
+
+.today-card { min-height: 76px; margin-top: 8px; padding: 13px 14px; }
+.today-card-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 70px; min-height: 38px; padding: 0 11px; margin-inline-start: auto;
+  border-radius: var(--r-pill); color: var(--accent-ink); background: var(--accent-gradient);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 6px 14px rgba(9,29,75,.25);
+  font-size: 12px; font-weight: 700;
+}
+.today-card-action.secondary { color: var(--accent); background: var(--accent-wash); box-shadow: none; }
+.today-card-action > span { display: inline; margin: 0; color: inherit; font: inherit; }
+.today-card-action:hover { filter: brightness(1.08); }
+.today-card-action:active { transform: scale(.97); }
+.header-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 12px; border-radius: var(--r-pill); color: var(--accent); background: var(--accent-wash); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.header-action:hover { background: color-mix(in srgb, var(--accent) 23%, var(--surface)); }
+.header-action:active { transform: scale(.97); }
+
+.workout-focus-card { margin-top: 1px; }
+.focus-history-line { display: flex; flex-wrap: wrap; gap: 6px 13px; margin-top: 10px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.focus-history-line span { display: inline-flex; align-items: center; gap: 4px; }
+.focus-history-line svg { color: var(--accent); }
+.focus-history-line .pb { color: var(--ink-dim); }
+.history-reveal { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 42px; margin-top: 2px; border: 1px solid var(--line); border-radius: var(--r-md); color: var(--accent); background: var(--surface); font-size: 12px; font-weight: 650; }
+.history-reveal svg { transition: transform .16s ease; }
+.history-reveal svg.is-open { transform: rotate(180deg); }
+
+@media (min-width: 760px) {
+  .app-shell { padding: 28px 28px 108px; }
+  .app-top, .page-content { width: min(100%, 920px); }
+  .daily-heading { padding-top: 20px; }
+  .daily-heading h1 { font-size: 44px; }
+  .today-week-day { min-height: 54px; }
+}
+
+/* Tablet: enough width for the today cards to sit side by side, short of the
+   full desktop side-nav workspace below. */
+@media (min-width: 760px) {
+  .view-today { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .view-today .daily-heading, .view-today .today-week-strip, .view-today .stat-row, .view-today .today-insight { grid-column: 1 / -1; }
+}
+
+/* Desktop gets a true workspace: a side navigation and information laid out
+   by task, rather than a stretched mobile column. */
+@media (min-width: 960px) {
+  :root { --nav-clearance: 36px; }
+  .app-shell { padding: 30px 128px 34px 44px; }
+  .app-top, .page-content { width: min(100%, 1180px); }
+  .bottom-nav {
+    top: 50%; right: 28px; left: auto; bottom: auto; transform: translateY(-50%);
+    width: 78px; grid-template-columns: 1fr; gap: 5px; padding: 7px;
+    border: 1px solid var(--line); border-radius: 22px; background: rgba(28,28,30,.92);
+  }
+  .bottom-nav button { min-height: 62px; padding: 8px 3px; border-radius: 15px; font-size: 10px; }
+  .bottom-nav button.active { color: var(--accent-ink); background: var(--accent-gradient); }
+  .bottom-nav button.active svg { filter: none; }
+  .toast { bottom: 28px; }
+
+  .view-today { grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); grid-template-areas: "heading heading" "week week" "workout nutrition" "stats stats" "insight insight"; }
+  .view-today .daily-heading { grid-area: heading; padding: 8px 2px 0; }
+  .view-today .today-week-strip { grid-area: week; margin: 0; }
+  .view-today .today-card { height: 100%; min-height: 112px; margin: 0; padding: 18px; }
+  .view-today .today-workout-card { grid-area: workout; }
+  .view-today .today-nutrition-card { grid-area: nutrition; }
+  .view-today .stat-row { grid-area: stats; margin-top: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .view-today .stat-row article { padding: 16px; }
+  .view-today .today-insight { grid-area: insight; }
+
+  .view-nutrition { display: grid; grid-template-columns: minmax(360px, .9fr) minmax(0, 1.1fr); gap: 14px 18px; align-items: stretch; }
+  .view-nutrition > .page-heading, .view-nutrition > .progress-legend, .view-nutrition > .section-block { grid-column: 1 / -1; }
+  .view-nutrition > .page-heading { padding-top: 10px; margin-bottom: -2px; }
+  .view-nutrition > .nutrition-summary { height: 100%; }
+  .view-nutrition > .macro-grid { align-content: stretch; margin: 0; }
+  .view-nutrition > .macro-grid .macro-card { display: grid; align-content: space-between; }
+
+  .view-progress { display: grid; grid-template-columns: minmax(340px, .78fr) minmax(0, 1.22fr); gap: 16px 20px; align-items: start; }
+  .view-progress > .page-heading, .view-progress > .section-block { grid-column: 1 / -1; }
+  .view-progress > .page-heading { padding-top: 10px; margin-bottom: -2px; }
+  .view-progress > .month-calendar, .view-progress > .day-log { margin: 0; }
+
+  .view-workout.view-templates:not(.workout-active) { display: grid; grid-template-columns: minmax(340px, .72fr) minmax(0, 1.28fr); gap: 16px 20px; align-items: start; }
+  .view-workout.view-templates:not(.workout-active) > .page-heading { grid-column: 1 / -1; padding-top: 10px; margin-bottom: -2px; }
+  .view-workout.view-templates:not(.workout-active) > .workout-day-browser,
+  .view-workout.view-templates:not(.workout-active) > .section-block { margin: 0; }
+  .view-workout.workout-active .workout-day-browser { max-width: 920px; margin-inline: auto; }
 }
