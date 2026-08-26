@@ -21,7 +21,7 @@ This starter does not use `wrangler.jsonc`.
 ## Included Shape
 
 - edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings (both unused — this app is Supabase-only)
+- `.openai/hosting.json` declares optional Sites D1 and R2 bindings (both unused — this app is local-only, no backend)
 - `vite.config.ts` simulates declared bindings for local development
 
 ## Useful Commands

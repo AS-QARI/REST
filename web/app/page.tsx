@@ -37,7 +37,7 @@ import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
-import { authenticateOwner, isSupabaseConfigured, loadOwnerSnapshot, saveOwnerSnapshot } from "./supabase";
+import { authenticateOwner } from "./auth";
 
 export const dynamic = "force-static";
 
@@ -51,7 +51,6 @@ type Sheet =
   | "exercise"
   | "set"
   | null;
-type SyncStatus = "synced" | "pending" | "error";
 
 type Equipment = {
   id: string;
@@ -596,8 +595,6 @@ function Sheet({
 
 export default function Home() {
   const [data, setData] = useState<AppData>(EMPTY_DATA);
-  const [supabaseConfigured] = useState(isSupabaseConfigured());
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [loaded, setLoaded] = useState(false);
   const [signedIn, setSignedIn] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("rest-session") === "active",
@@ -660,30 +657,12 @@ export default function Home() {
     void (async () => {
       const stored = await loadAppData<AppData>();
       let next = stored ?? EMPTY_DATA;
-      if (isSupabaseConfigured()) {
-        try {
-          const remote = await loadOwnerSnapshot<AppData>();
-          if (remote) {
-            next = remote;
-            await saveAppData(remote);
-          }
-        } catch {
-          // Offline mode remains the source of truth until the next successful sync.
-        }
-      }
       next = withEquipmentExercises(next);
       const merged = mergeLoopRepHistory(next);
       const importedCount = merged.sessions.length - next.sessions.length;
       if (importedCount > 0) {
         next = merged;
         await saveAppData(next);
-        if (isSupabaseConfigured()) {
-          try {
-            await saveOwnerSnapshot(next);
-          } catch {
-            // The local import remains available and will sync on the next successful save.
-          }
-        }
       }
       if (!active) return;
       const hydrated = hydrateActiveWorkoutForDay(next, selectedWorkoutDate);
@@ -716,12 +695,6 @@ export default function Home() {
     const next = reconcileActiveWorkoutIntoSessions(raw);
     setData(next);
     void saveAppData(next);
-    if (supabaseConfigured) {
-      setSyncStatus("pending");
-      void saveOwnerSnapshot(next)
-        .then(() => setSyncStatus("synced"))
-        .catch(() => setSyncStatus("error"));
-    }
   };
 
   // The workout editor always reflects whichever day is selected in the day-browser:
@@ -1057,18 +1030,9 @@ export default function Home() {
         return;
       }
       localStorage.setItem("rest-session", "active");
-      if (supabaseConfigured) {
-        const remote = await loadOwnerSnapshot<AppData>();
-        if (remote) {
-          setData(remote);
-          await saveAppData(remote);
-        } else {
-          await saveOwnerSnapshot(data);
-        }
-      }
       setSignedIn(true);
     } catch {
-      setLoginError(supabaseConfigured ? "تعذر الاتصال الآن. تحقق من الشبكة." : "تعذر تسجيل الدخول. أعد المحاولة.");
+      setLoginError("تعذر تسجيل الدخول. أعد المحاولة.");
     } finally {
       setLoginPending(false);
     }
@@ -1444,7 +1408,7 @@ export default function Home() {
               {loginPending ? "جارٍ الدخول…" : "دخول إلى رست"}
             </AppButton>
           </form>
-          <p className="local-note"><LockKeyhole size={14} /> {supabaseConfigured ? "Supabase مفعّل · نسخة محلية تعمل دون إنترنت" : "وضع محلي · بياناتك محفوظة على جهازك فقط"}</p>
+          <p className="local-note"><LockKeyhole size={14} /> وضع محلي · بياناتك محفوظة على جهازك فقط</p>
         </section>
       </main>
     );
@@ -1991,20 +1955,13 @@ export default function Home() {
   );
 
   const content = tab === "today" ? todayContent : tab === "workout" ? workoutContent : tab === "nutrition" ? nutritionContent : progressContent;
-  const syncLabel = !supabaseConfigured
-    ? "محفوظ على جهازك"
-    : syncStatus === "pending"
-      ? "جارٍ الحفظ…"
-      : syncStatus === "error"
-        ? "تعذّرت المزامنة"
-        : "متزامن";
 
   return (
     <main className="app-shell">
       <div className="app-top">
         <Logo />
-        <div className="sync-indicator" data-status={supabaseConfigured ? syncStatus : "local"}>
-          <span className="sync-dot" /> {syncLabel}
+        <div className="sync-indicator" data-status="local">
+          <span className="sync-dot" /> محفوظ على جهازك
         </div>
         <button className="icon-button surface" onClick={logout} aria-label="تسجيل الخروج"><LogOut size={18} /></button>
       </div>

@@ -1,7 +1,5 @@
-# Offline and sync behavior
+# Offline behavior
 
-During an active workout, IndexedDB is the source of truth. A set is committed locally before any future cloud request, so a connection failure cannot discard a completed set.
+The app is local-only. IndexedDB is the single source of truth for equipment, workouts, and nutrition — a set is committed locally the moment it's logged, and nothing leaves the device.
 
-The UI currently reports local saving only. Supabase synchronization is intentionally not claimed as complete: it is the next integration slice after project credentials and the SQL migration are applied.
-
-The future outbox will record an immutable `client_mutation_id`, entity id, timestamp, retry state, and server acknowledgement. The first conflict policy will be record-level last-write-wins with an explicit conflict notice; set logs remain append-only and are not silently deduplicated without matching mutation IDs.
+There is no cloud sync, no outbox, and no backend. Data lives only on the device it was entered on.

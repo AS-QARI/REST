@@ -7,4 +7,4 @@
 - Workout templates start empty. REST does not ship Push/Pull/Legs or other prebuilt plans.
 - Rest timer and AI meal photos are intentionally deferred.
 - Nutrition goals are user entered, not calculated automatically.
-- Supabase is the intended backend. The visible login is username and password only; Supabase uses a non-visible technical identity under the hood.
+- There is no backend by design. The app is local-only (IndexedDB); login is username and password only, checked against a locally stored hash.
