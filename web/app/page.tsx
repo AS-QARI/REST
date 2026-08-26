@@ -246,27 +246,27 @@ type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = { Chest: "صدر", Back: "ظهر", Shoulders: "أكتاف", Arms: "ذراعين", Legs: "أرجل" };
 
 const BUILT_IN_EXERCISES: Exercise[] = [
-  { id: "built-in-bench-press", name: "Bench Press", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 6, repMax: 12 },
-  { id: "built-in-incline-press", name: "Incline Press", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 8, repMax: 12 },
-  { id: "built-in-chest-fly", name: "Chest Fly", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 10, repMax: 15 },
-  { id: "built-in-push-up", name: "Push-Up", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 8, repMax: 20 },
-  { id: "built-in-lat-pulldown", name: "Lat Pulldown", equipmentId: "built-in", primaryMuscle: "Back", repMin: 8, repMax: 12 },
-  { id: "built-in-seated-row", name: "Seated Row", equipmentId: "built-in", primaryMuscle: "Back", repMin: 8, repMax: 12 },
-  { id: "built-in-barbell-row", name: "Barbell Row", equipmentId: "built-in", primaryMuscle: "Back", repMin: 6, repMax: 12 },
-  { id: "built-in-pull-up", name: "Pull-Up", equipmentId: "built-in", primaryMuscle: "Back", repMin: 5, repMax: 12 },
-  { id: "built-in-shoulder-press", name: "Shoulder Press", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 6, repMax: 12 },
-  { id: "built-in-lateral-raise", name: "Lateral Raise", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 10, repMax: 20 },
-  { id: "built-in-rear-delt-fly", name: "Rear Delt Fly", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 10, repMax: 20 },
-  { id: "built-in-biceps-curl", name: "Biceps Curl", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
-  { id: "built-in-hammer-curl", name: "Hammer Curl", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
-  { id: "built-in-triceps-pushdown", name: "Triceps Pushdown", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
-  { id: "built-in-overhead-triceps", name: "Overhead Triceps Extension", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
-  { id: "built-in-squat", name: "Squat", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 5, repMax: 12 },
-  { id: "built-in-leg-press", name: "Leg Press", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 8, repMax: 15 },
-  { id: "built-in-leg-extension", name: "Leg Extension", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 15 },
-  { id: "built-in-leg-curl", name: "Leg Curl", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 15 },
-  { id: "built-in-hip-thrust", name: "Hip Thrust", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 8, repMax: 15 },
-  { id: "built-in-calf-raise", name: "Calf Raise", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 20 },
+  { id: "built-in-bench-press", name: "بنش برس", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 6, repMax: 12 },
+  { id: "built-in-incline-press", name: "بنش مائل", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 8, repMax: 12 },
+  { id: "built-in-chest-fly", name: "باترفلاي", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 10, repMax: 15 },
+  { id: "built-in-push-up", name: "تمرين الضغط", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 8, repMax: 20 },
+  { id: "built-in-lat-pulldown", name: "سحب أمامي", equipmentId: "built-in", primaryMuscle: "Back", repMin: 8, repMax: 12 },
+  { id: "built-in-seated-row", name: "تجديف جالس", equipmentId: "built-in", primaryMuscle: "Back", repMin: 8, repMax: 12 },
+  { id: "built-in-barbell-row", name: "تجديف بار", equipmentId: "built-in", primaryMuscle: "Back", repMin: 6, repMax: 12 },
+  { id: "built-in-pull-up", name: "عقلة", equipmentId: "built-in", primaryMuscle: "Back", repMin: 5, repMax: 12 },
+  { id: "built-in-shoulder-press", name: "ضغط أكتاف", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 6, repMax: 12 },
+  { id: "built-in-lateral-raise", name: "رفرفة جانبية", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 10, repMax: 20 },
+  { id: "built-in-rear-delt-fly", name: "رفرفة خلفية", equipmentId: "built-in", primaryMuscle: "Shoulders", repMin: 10, repMax: 20 },
+  { id: "built-in-biceps-curl", name: "باي بار", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
+  { id: "built-in-hammer-curl", name: "هامر كيرل", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
+  { id: "built-in-triceps-pushdown", name: "تراي بوش داون", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
+  { id: "built-in-overhead-triceps", name: "تراي فوق الرأس", equipmentId: "built-in", primaryMuscle: "Arms", repMin: 8, repMax: 15 },
+  { id: "built-in-squat", name: "سكوات", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 5, repMax: 12 },
+  { id: "built-in-leg-press", name: "ليق بريس", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 8, repMax: 15 },
+  { id: "built-in-leg-extension", name: "ليق إكستنشن", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 15 },
+  { id: "built-in-leg-curl", name: "ليق كيرل", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 15 },
+  { id: "built-in-hip-thrust", name: "هيب ثرست", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 8, repMax: 15 },
+  { id: "built-in-calf-raise", name: "رفع سمانة", equipmentId: "built-in", primaryMuscle: "Legs", repMin: 10, repMax: 20 },
 ];
 
 const EQUIPMENT_TYPES = ["آلة", "كيبل", "أوزان حرة", "بار", "وزن جسم", "أخرى"];
@@ -1710,7 +1710,7 @@ export default function Home() {
                         {equipment.photos?.length ? <img src={equipment.photos[0]} alt={`صورة ${equipment.name}`} /> : <Dumbbell size={26} />}
                         {equipment.photos && equipment.photos.length > 1 && <span className="equipment-photo-count">{equipment.photos.length}</span>}
                       </div>
-                      <div><h2>{equipment.name}</h2><p dir="ltr">{equipment.primaryMuscle} · {equipment.type}</p><span>{countLabel(data.exercises.filter((item) => item.equipmentId === equipment.id).length, "تمرين واحد مرتبط", "تمارين مرتبطة")}</span></div>
+                      <div><h2>{equipment.name}</h2><p>{muscleGroupLabel(equipment.primaryMuscle)} · {equipment.type}</p><span>{countLabel(data.exercises.filter((item) => item.equipmentId === equipment.id).length, "تمرين واحد مرتبط", "تمارين مرتبطة")}</span></div>
                       <button className="card-edit" onClick={() => openEquipmentSheet(equipment)} aria-label={`تعديل ${equipment.name}`}><Pencil size={17} /></button>
                       <button className="card-delete" onClick={() => deleteEquipment(equipment.id)} aria-label={`حذف ${equipment.name}`}><Trash2 size={18} /></button>
                     </article>
@@ -2023,16 +2023,16 @@ export default function Home() {
                 </label>
               </div>
             </div>
-            <label><span>اسم الجهاز <b>*</b></span><input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} placeholder="مثال: Chest Press Machine" autoFocus /></label>
+            <label><span>اسم الجهاز <b>*</b></span><input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} placeholder="مثال: جهاز ضغط الصدر" autoFocus /></label>
             <fieldset className="muscle-fieldset">
               <legend>المجموعة العضلية <b>*</b></legend>
               <div className="muscle-group-grid compact" role="group" aria-label="المجموعة العضلية" dir="ltr">
-                {MUSCLE_GROUPS.map((muscle) => <button type="button" key={muscle} className={equipmentForm.primaryMuscle === muscle ? "selected" : ""} onClick={() => setEquipmentForm({ ...equipmentForm, primaryMuscle: muscle })} aria-pressed={equipmentForm.primaryMuscle === muscle}>{muscle}</button>)}
+                {MUSCLE_GROUPS.map((muscle) => <button type="button" key={muscle} className={equipmentForm.primaryMuscle === muscle ? "selected" : ""} onClick={() => setEquipmentForm({ ...equipmentForm, primaryMuscle: muscle })} aria-pressed={equipmentForm.primaryMuscle === muscle}>{MUSCLE_GROUP_LABELS[muscle]}</button>)}
               </div>
             </fieldset>
             <label><span>نوع الجهاز</span><select value={equipmentForm.type} onChange={(event) => setEquipmentForm({ ...equipmentForm, type: event.target.value })}>{EQUIPMENT_TYPES.map((type) => <option value={type} key={type}>{type}</option>)}</select></label>
             {!editingEquipmentId && (
-              <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input dir="ltr" value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder={equipmentForm.name.trim() || "e.g. Seated Chest Press"} /><small className="field-hint">اتركه فارغًا وسنستخدم اسم الجهاز، ليظهر مباشرة عند إضافة تمرين.</small></label>
+              <label><span>اسم التمرين على الجهاز <em>اختياري</em></span><input value={equipmentForm.exerciseName} onChange={(event) => setEquipmentForm({ ...equipmentForm, exerciseName: event.target.value })} placeholder={equipmentForm.name.trim() || "مثال: ضغط صدر جالس"} /><small className="field-hint">اتركه فارغًا وسنستخدم اسم الجهاز، ليظهر مباشرة عند إضافة تمرين.</small></label>
             )}
             <label><span>ملاحظات <em>اختياري</em></span><textarea value={equipmentForm.notes} onChange={(event) => setEquipmentForm({ ...equipmentForm, notes: event.target.value })} placeholder="رقم المقعد، إعداد الجهاز، أو أي تلميح مهم" rows={3} /></label>
             <AppButton type="submit" disabled={!equipmentForm.name.trim() || !equipmentForm.primaryMuscle} icon={<Check size={18} />}>{editingEquipmentId ? "حفظ التعديلات" : "حفظ الجهاز"}</AppButton>
@@ -2128,7 +2128,7 @@ export default function Home() {
                 </div>
               </label>
               <label className="set-metric-card">
-                <span>التكرارات <small>reps</small></span>
+                <span>التكرارات</span>
                 <div className="set-sheet-stepper" dir="ltr">
                   <button type="button" onClick={() => stepSetFormValue("reps", -1)} aria-label="إنقاص التكرارات"><Minus size={17} /></button>
                   <input value={setForm.reps} onChange={(event) => { setSetError(""); setSetForm({ ...setForm, reps: event.target.value }); }} type="text" inputMode="numeric" placeholder="8" aria-label="عدد التكرارات" />
