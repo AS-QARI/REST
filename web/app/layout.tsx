@@ -9,8 +9,8 @@ const arabicFont = Noto_Sans_Arabic({
   weight: ["400", "500", "600", "700"],
 });
 
-const SITE_ORIGIN = "https://as-qari.github.io";
-const BASE_PATH = "/REST";
+const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_ORIGIN || process.env.URL || "http://localhost:3000";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export const dynamic = "force-static";
 

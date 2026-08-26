@@ -36,6 +36,9 @@ jobs:
 
       - name: Build static export
         working-directory: web
+        env:
+          NEXT_PUBLIC_BASE_PATH: /REST
+          NEXT_PUBLIC_SITE_ORIGIN: https://as-qari.github.io
         run: pnpm run build
 
       - uses: actions/configure-pages@v5

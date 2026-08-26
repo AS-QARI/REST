@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 // vinext's static export ("output: export") does not correctly apply Next's
 // `basePath` option (the RSC prerenderer 404s when both are combined), so the
-// build runs without basePath and this script rewrites the emitted
-// domain-root-absolute asset references ("/assets/...") to live under
-// BASE_PATH afterwards, matching where GitHub Pages actually serves the site.
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+// build always runs without basePath and this script rewrites the emitted
+// domain-root-absolute references to live under BASE_PATH afterwards, for
+// platforms that serve the site from a sub-path (GitHub Pages project
+// sites). Set NEXT_PUBLIC_BASE_PATH to enable this; unset (the default) it
+// no-ops, which is correct for root-hosted platforms like Netlify.
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, extname } from "node:path";
 
-const BASE_PATH = "/REST";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 const DIST_DIR = join(process.cwd(), "dist", "client");
-const TEXT_EXTENSIONS = new Set([".html", ".rsc", ".js", ".css", ".webmanifest", ".json", ".svg"]);
+const TEXT_EXTENSIONS = new Set([".html", ".rsc", ".js", ".css", ".json", ".svg"]);
+
+if (!BASE_PATH) {
+  console.log("fix-base-path: NEXT_PUBLIC_BASE_PATH not set, skipping (root-hosted build)");
+  process.exit(0);
+}
 
 let filesPatched = 0;
 
@@ -36,4 +43,18 @@ function walk(dir) {
 }
 
 walk(DIST_DIR);
-console.log(`fix-base-path: patched ${filesPatched} file(s) under dist/client to use ${BASE_PATH}/assets/`);
+
+// manifest.webmanifest ships as a static /public file with root-relative
+// start_url/scope/icon paths — prefix those too, separately, since they
+// don't match the "/assets/" pattern the walk above looks for.
+const manifestPath = join(DIST_DIR, "manifest.webmanifest");
+if (existsSync(manifestPath)) {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.start_url = `${BASE_PATH}${manifest.start_url}`;
+  manifest.scope = `${BASE_PATH}${manifest.scope}`;
+  manifest.icons = manifest.icons.map((icon) => ({ ...icon, src: `${BASE_PATH}${icon.src}` }));
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  filesPatched += 1;
+}
+
+console.log(`fix-base-path: patched ${filesPatched} file(s) under dist/client to use ${BASE_PATH}/`);

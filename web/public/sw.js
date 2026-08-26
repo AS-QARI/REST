@@ -1,5 +1,5 @@
 const CACHE_NAME = "rest-shell-v2";
-const APP_SHELL = ["/REST/"];
+const APP_SHELL = [self.registration.scope];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/REST/"))),
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(self.registration.scope))),
     );
     return;
   }

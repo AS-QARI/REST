@@ -674,7 +674,8 @@ export default function Home() {
       setLoaded(true);
     })();
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/REST/sw.js", { scope: "/REST/" }).catch(() => undefined);
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      navigator.serviceWorker.register(`${basePath}/sw.js`, { scope: `${basePath}/` }).catch(() => undefined);
     }
     return () => { active = false; };
     // Runs once on mount; selectedWorkoutDate's initial value (today) is what we want here.
