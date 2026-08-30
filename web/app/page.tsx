@@ -4,30 +4,35 @@
 import {
   Activity,
   ArrowLeft,
-  BarChart3,
   Calendar,
   Camera,
   Check,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
-  CirclePlus,
+  ChevronUp,
   ClipboardList,
   Dumbbell,
   Eye,
   EyeOff,
+  Filter,
+  Flame,
   History,
+  Info,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   Minus,
+  Pause,
   Pencil,
+  Play,
   Plus,
+  Repeat,
   Search,
   Settings2,
-  Sparkles,
-  Target,
+  SlidersHorizontal,
   Trash2,
+  TrendingDown,
   TrendingUp,
   Trophy,
   Utensils,
@@ -41,7 +46,7 @@ import { authenticateOwner } from "./auth";
 
 export const dynamic = "force-static";
 
-type Tab = "today" | "workout" | "nutrition" | "progress";
+type Tab = "workout" | "nutrition" | "progress";
 type WorkoutView = "templates" | "equipment";
 type Sheet =
   | "equipment"
@@ -244,6 +249,13 @@ function mergeLoopRepHistory(base: AppData): AppData {
 const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Arms", "Legs"] as const;
 type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = { Chest: "صدر", Back: "ظهر", Shoulders: "أكتاف", Arms: "ذراعين", Legs: "أرجل" };
+// Decorative category colors for exercise chips — distinct from --accent (state).
+const MUSCLE_GROUP_COLOR_VAR: Record<MuscleGroup, string> = { Chest: "--cat-chest", Back: "--cat-back", Shoulders: "--cat-shoulders", Arms: "--cat-arms", Legs: "--cat-legs" };
+
+function muscleGroupColorVar(value: string) {
+  const group = muscleGroupFor(value);
+  return group ? MUSCLE_GROUP_COLOR_VAR[group] : "--subtle";
+}
 
 const BUILT_IN_EXERCISES: Exercise[] = [
   { id: "built-in-bench-press", name: "بنش برس", equipmentId: "built-in", primaryMuscle: "Chest", repMin: 6, repMax: 12 },
@@ -272,10 +284,9 @@ const BUILT_IN_EXERCISES: Exercise[] = [
 const EQUIPMENT_TYPES = ["آلة", "كيبل", "أوزان حرة", "بار", "وزن جسم", "أخرى"];
 const MEAL_CATEGORIES = ["فطور", "غداء", "عشاء", "سناك", "قبل التمرين", "بعد التمرين"];
 const NAVIGATION: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: "today", label: "اليوم", icon: Activity },
   { id: "workout", label: "التمرين", icon: Dumbbell },
-  { id: "nutrition", label: "الوجبات", icon: Utensils },
-  { id: "progress", label: "السجل", icon: BarChart3 },
+  { id: "nutrition", label: "التغذية", icon: Utensils },
+  { id: "progress", label: "التقدم", icon: TrendingUp },
 ];
 
 function uid() {
@@ -330,9 +341,18 @@ function dateOnSelectedDay(selectedDay: Date) {
   return combined.toISOString();
 }
 
-function lastSevenDays() {
-  const start = shiftDate(new Date(), -6);
-  return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
+// The day strip keeps the selected day centred, with two days either side.
+function daysAround(value: Date, radius = 2) {
+  const start = shiftDate(value, -radius);
+  return Array.from({ length: radius * 2 + 1 }, (_, index) => shiftDate(start, index));
+}
+
+const LATIN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatClock(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function shiftMonth(value: Date, months: number) {
@@ -366,6 +386,11 @@ function progressBand(current: number, target: number) {
 
 function countLabel(count: number, singularPhrase: string, pluralPhrase: string) {
   return count === 1 ? singularPhrase : `${formatNumber(count)} ${pluralPhrase}`;
+}
+
+function weekRangeLabel(count: 5 | 7 | 14 | 30) {
+  if (count === 30) return "آخر شهر";
+  return `آخر ${formatNumber(count)} ${count === 14 ? "يوم" : "أيام"}`;
 }
 
 function daysAgoLabel(days: number) {
@@ -567,6 +592,57 @@ function EmptyState({
   );
 }
 
+// Shared by the Workout and Nutrition tabs: week arrows, a "today" reset, and a
+// five-day strip that keeps the selected day centred.
+function DaySelector({
+  selectedDay,
+  onSelect,
+  countFor,
+  label,
+}: {
+  selectedDay: Date;
+  onSelect: (day: Date) => void;
+  countFor: (day: Date) => number;
+  label: string;
+}) {
+  return (
+    <>
+      <div className="day-nav">
+        <button type="button" onClick={() => onSelect(shiftDate(selectedDay, -7))} aria-label="الأسبوع السابق">
+          <ChevronRight size={20} />
+        </button>
+        <button type="button" className="day-nav-today" onClick={() => onSelect(new Date())}>اليوم</button>
+        <button type="button" onClick={() => onSelect(shiftDate(selectedDay, 7))} aria-label="الأسبوع التالي">
+          <ChevronLeft size={20} />
+        </button>
+      </div>
+      <div className="day-strip" role="group" aria-label={label}>
+        {daysAround(selectedDay).map((day) => {
+          const key = calendarDayKey(day);
+          const selected = key === calendarDayKey(selectedDay);
+          const today = isToday(day.toISOString());
+          const count = countFor(day);
+          return (
+            <button
+              type="button"
+              key={key}
+              className={`day-card${selected ? " selected" : ""}${today ? " today" : ""}`}
+              onClick={() => onSelect(day)}
+              aria-pressed={selected}
+              aria-label={formatDayHeading(day.toISOString())}
+            >
+              <span className="day-weekday">{ARABIC_WEEK_DAYS[day.getDay()]}</span>
+              <b className="day-number">{day.getDate()}</b>
+              <small className="day-month">{LATIN_MONTHS[day.getMonth()]}</small>
+              {count > 0 && <span className="day-count"><i />{formatNumber(count)}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 function Sheet({
   title,
   children,
@@ -599,13 +675,15 @@ export default function Home() {
   const [signedIn, setSignedIn] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("rest-session") === "active",
   );
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>("workout");
   const [workoutView, setWorkoutView] = useState<WorkoutView>("templates");
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [toast, setToastState] = useState<string | null>(null);
+  const [toast, setToastState] = useState<{ text: string; tone: "default" | "record" } | null>(null);
+  const [toastKey, setToastKey] = useState(0);
   const [toastUndo, setToastUndo] = useState<(() => void) | null>(null);
-  const showToast = (message: string, onUndo?: () => void) => {
-    setToastState(message);
+  const showToast = (message: string, onUndo?: () => void, tone: "default" | "record" = "default") => {
+    setToastState({ text: message, tone });
+    setToastKey((key) => key + 1);
     setToastUndo(() => onUndo ?? null);
   };
   const [loginError, setLoginError] = useState("");
@@ -640,17 +718,29 @@ export default function Home() {
   const [exerciseDraftSets, setExerciseDraftSets] = useState<ExerciseDraftSet[]>([]);
   const [exerciseNotes, setExerciseNotes] = useState("");
   const [showExerciseNotes, setShowExerciseNotes] = useState(false);
+  // Set type and RIR apply to the whole draft batch; both stay tucked behind the
+  // same disclosure as notes so the default logging view matches the design.
+  const [draftSetType, setDraftSetType] = useState<"working" | "warmup">("working");
+  const [draftRir, setDraftRir] = useState("2");
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentMuscleGroup, setEquipmentMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentSearch, setEquipmentSearch] = useState("");
   const [selectedExerciseId, setSelectedExerciseId] = useState("");
-  const [setForm, setSetForm] = useState({ weightKg: "", reps: "", rir: "2", type: "working" as "working" | "warmup" });
-  const [setError, setSetError] = useState("");
   const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
+  const [selectedMealDate, setSelectedMealDate] = useState(() => new Date());
+  // Session stopwatch — a view-only timer, never persisted with the workout.
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
   const [historyDateOverride, setHistoryDateOverride] = useState<Date | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
-  const [mealHistoryExpanded, setMealHistoryExpanded] = useState(false);
+  // Controls for the "آخر N أيام" weekly review table on the Progress tab.
+  const [weekRangeDays, setWeekRangeDays] = useState<5 | 7 | 14 | 30>(5);
+  const [weekRangeMenuOpen, setWeekRangeMenuOpen] = useState(false);
+  const [weekFilterMenuOpen, setWeekFilterMenuOpen] = useState(false);
+  const [weekMuscleFilter, setWeekMuscleFilter] = useState<MuscleGroup | "All">("All");
+  const [weekOnlyTrained, setWeekOnlyTrained] = useState(false);
+  const [fullHistoryExpanded, setFullHistoryExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -686,7 +776,16 @@ export default function Home() {
     if (!toast) return;
     const timer = window.setTimeout(() => { setToastState(null); setToastUndo(null); }, 5000);
     return () => window.clearTimeout(timer);
-  }, [toast]);
+    // Keyed on toastKey (not toast itself) so firing the same message twice in a
+    // row — e.g. two quick "كرر آخر مجموعة" taps — still resets the 5s timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toastKey]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const id = window.setInterval(() => setTimerSeconds((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [timerRunning]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -708,20 +807,13 @@ export default function Home() {
     persist(hydrated);
   };
 
-  const todayMeals = useMemo(() => data.meals.filter((meal) => isToday(meal.createdAt)), [data.meals]);
-  const nutrition = useMemo(() => sumMeal(todayMeals), [todayMeals]);
-  const pastMealDays = useMemo(() => {
-    const past = data.meals.filter((meal) => !isToday(meal.createdAt));
-    const groups = new Map<string, Meal[]>();
-    past.forEach((meal) => {
-      const key = new Date(meal.createdAt).toDateString();
-      groups.set(key, [...(groups.get(key) ?? []), meal]);
-    });
-    return Array.from(groups.entries())
-      .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
-      .map(([key, meals]) => ({ key, meals, calories: meals.reduce((sum, meal) => sum + meal.calories, 0) }));
-  }, [data.meals]);
-  const visiblePastMealDays = mealHistoryExpanded ? pastMealDays : pastMealDays.slice(0, 3);
+  const selectedDayMeals = useMemo(
+    () => data.meals
+      .filter((meal) => calendarDayKey(meal.createdAt) === calendarDayKey(selectedMealDate))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [data.meals, selectedMealDate],
+  );
+  const nutrition = useMemo(() => sumMeal(selectedDayMeals), [selectedDayMeals]);
   const sortedSessions = useMemo(
     () => [...data.sessions].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()),
     [data.sessions],
@@ -734,12 +826,6 @@ export default function Home() {
     if (sortedSessions.some((session) => isToday(session.completedAt))) return new Date();
     return sortedSessions[0] ? new Date(sortedSessions[0].completedAt) : new Date();
   }, [historyDateOverride, sortedSessions]);
-  const workoutWeekDays = useMemo(() => {
-    const start = new Date(selectedWorkoutDate);
-    start.setHours(12, 0, 0, 0);
-    start.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 7 }, (_, index) => shiftDate(start, index));
-  }, [selectedWorkoutDate]);
   const selectedWorkoutDaySessions = useMemo(
     () => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(selectedWorkoutDate)),
     [selectedWorkoutDate, sortedSessions],
@@ -748,12 +834,6 @@ export default function Home() {
     () => selectedWorkoutDaySessions.filter((session) => session.id !== data.activeWorkout?.id),
     [selectedWorkoutDaySessions, data.activeWorkout],
   );
-  const workoutWeekLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
-    month: "long",
-    year: "numeric",
-    calendar: "gregory",
-    numberingSystem: "latn",
-  }).format(selectedWorkoutDate), [selectedWorkoutDate]);
   const historyMonthCells = useMemo(() => {
     const year = selectedHistoryDate.getFullYear();
     const month = selectedHistoryDate.getMonth();
@@ -776,11 +856,6 @@ export default function Home() {
     () => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(selectedHistoryDate)),
     [selectedHistoryDate, sortedSessions],
   );
-  const totalWorkingSets = useMemo(
-    () => data.sessions.reduce((count, session) => count + session.exercises.reduce(
-      (sets, exercise) => sets + exercise.sets.filter((set) => set.type === "working").length, 0), 0),
-    [data.sessions],
-  );
   const historyMonthLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
     month: "long",
     year: "numeric",
@@ -793,6 +868,66 @@ export default function Home() {
       ...BUILT_IN_EXERCISES.filter((builtIn) => !data.exercises.some((exercise) => exercise.id === builtIn.id)),
     ],
     [data.exercises],
+  );
+  // Quick-glance weekly review for the Progress tab: today first, going back N days,
+  // each paired with the distinct exercises trained that day (or "rest" if none).
+  // Optionally narrowed to one muscle group via weekMuscleFilter.
+  const weekReviewDays = useMemo(() => {
+    return Array.from({ length: weekRangeDays }, (_, index) => shiftDate(new Date(), -index)).map((day) => {
+      const key = calendarDayKey(day);
+      const daySessions = sortedSessions.filter((session) => calendarDayKey(session.completedAt) === key);
+      const exerciseIds = Array.from(new Set(daySessions.flatMap((session) => session.exercises.map((item) => item.exerciseId))));
+      const exercises = exerciseIds
+        .map((id) => {
+          const meta = exerciseCatalog.find((item) => item.id === id);
+          if (!meta) return null;
+          if (weekMuscleFilter !== "All" && muscleGroupFor(meta.primaryMuscle) !== weekMuscleFilter) return null;
+          const setCount = daySessions.reduce((sum, session) => {
+            const match = session.exercises.find((item) => item.exerciseId === id);
+            return sum + (match?.sets.length ?? 0);
+          }, 0);
+          return { id, name: meta.name, setCount, muscle: meta.primaryMuscle };
+        })
+        .filter((item): item is { id: string; name: string; setCount: number; muscle: string } => item !== null);
+      return {
+        key,
+        day,
+        exercises,
+        volume: daySessions.reduce((sum, session) => sum + workoutVolume(session.exercises), 0),
+      };
+    }).filter((entry) => !weekOnlyTrained || entry.exercises.length > 0);
+  }, [sortedSessions, exerciseCatalog, weekRangeDays, weekMuscleFilter, weekOnlyTrained]);
+  // Current streak: walking back from today, a day counts if trained; a gap of 3+
+  // consecutive untrained days ends the streak, shorter gaps are forgiven.
+  const currentStreak = useMemo(() => {
+    let trainedCount = 0;
+    let gapRun = 0;
+    let cursor = new Date();
+    for (let i = 0; i < 400; i += 1) {
+      if (sessionDayKeys.has(calendarDayKey(cursor))) {
+        trainedCount += 1;
+        gapRun = 0;
+      } else {
+        gapRun += 1;
+        if (gapRun >= 3) break;
+      }
+      cursor = shiftDate(cursor, -1);
+    }
+    return trainedCount;
+  }, [sessionDayKeys]);
+  // Today first, then the 5 days before it — matches the streak row's reading order in RTL.
+  const streakDayChips = useMemo(
+    () => Array.from({ length: 6 }, (_, index) => shiftDate(new Date(), -index)).map((day) => ({
+      key: calendarDayKey(day),
+      day,
+      trained: sessionDayKeys.has(calendarDayKey(day)),
+      today: isToday(day.toISOString()),
+    })),
+    [sessionDayKeys],
+  );
+  const totalLoggedReps = useMemo(
+    () => data.sessions.reduce((sum, session) => sum + countLoggedReps(session.exercises), 0),
+    [data.sessions],
   );
   const personalRecords = useMemo(() => {
     const records = new Map<string, { weightKg: number; reps: number; date: string }>();
@@ -854,7 +989,7 @@ export default function Home() {
     });
   }, [data.equipment, equipmentMuscleGroup, equipmentSearch]);
   const exerciseDraftMeta = exerciseCatalog.find((exercise) => exercise.id === exerciseToAdd);
-  const exerciseDraftEquipment = data.equipment.find((equipment) => equipment.id === exerciseDraftMeta?.equipmentId);
+  const draftAlreadyLogged = data.activeWorkout?.exercises.some((item) => item.exerciseId === exerciseToAdd) ?? false;
   const getExerciseHistory = (exerciseId: string, before?: { id: string; date: string }) => sortedSessions.flatMap((session) => {
     if (isAtOrAfter(session, before)) return [];
     const logged = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
@@ -886,22 +1021,33 @@ export default function Home() {
   const exerciseHistory = getExerciseHistory(exerciseToAdd);
   const exercisePersonalBest = getExercisePersonalBest(exerciseToAdd);
   const daysSinceLastTrained = exerciseHistory.length ? daysSince(exerciseHistory[0].date) : null;
+  // Everything framed as "before this session" measures against the session on screen.
+  const sessionCutoff = data.activeWorkout
+    ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt }
+    : undefined;
   const activeSetCount = data.activeWorkout ? countLoggedSets(data.activeWorkout.exercises) : 0;
   const activeRepCount = data.activeWorkout ? countLoggedReps(data.activeWorkout.exercises) : 0;
   const activeVolume = data.activeWorkout ? workoutVolume(data.activeWorkout.exercises) : 0;
+  // How many of the selected day's exercises beat their own pre-session best.
+  const activeRecordCount = data.activeWorkout
+    ? data.activeWorkout.exercises.filter((item) => {
+        const heaviest = item.sets.filter((set) => set.type === "working").reduce((best, set) => Math.max(best, set.weightKg), 0);
+        if (!heaviest) return false;
+        const previousBest = getExercisePersonalBest(item.exerciseId, sessionCutoff);
+        return !previousBest || heaviest > previousBest.weightKg;
+      }).length
+    : 0;
+  // Volume change against the most recent session before the selected day.
+  const previousSessionVolume = (() => {
+    const earlier = sortedSessions.find((session) => !isAtOrAfter(session, sessionCutoff) && countLoggedSets(session.exercises) > 0);
+    return earlier ? workoutVolume(earlier.exercises) : 0;
+  })();
+  const volumeDelta = previousSessionVolume > 0 && activeVolume > 0
+    ? Math.round(((activeVolume - previousSessionVolume) / previousSessionVolume) * 100)
+    : null;
   const totalLoggedVolume = useMemo(
     () => data.sessions.reduce((total, session) => total + workoutVolume(session.exercises), 0),
     [data.sessions],
-  );
-  const todayLabel = useMemo(
-    () => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      calendar: "gregory",
-      numberingSystem: "latn",
-    }).format(new Date()),
-    [],
   );
   const latestPerformanceFor = (exerciseId: string, before?: { id: string; date: string }) => {
     for (const session of sortedSessions) {
@@ -913,36 +1059,6 @@ export default function Home() {
     return undefined;
   };
   const latestSetFor = (exerciseId: string) => latestPerformanceFor(exerciseId)?.set;
-
-  // selectedExerciseId is empty right after a reload and can point at another day's
-  // exercise after switching days, so the day always falls back to its first exercise.
-  const currentExerciseId = data.activeWorkout?.exercises.some((item) => item.exerciseId === selectedExerciseId)
-    ? selectedExerciseId
-    : data.activeWorkout?.exercises[0]?.exerciseId ?? "";
-  // Everything framed as "before this session" measures against the session on screen.
-  const sessionCutoff = data.activeWorkout
-    ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt }
-    : undefined;
-  const activeExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === currentExerciseId);
-  const activeExerciseMeta = exerciseCatalog.find((item) => item.id === currentExerciseId);
-
-  const openCompactSetSheet = (exerciseId: string) => {
-    if (!exerciseCatalog.some((exercise) => exercise.id === exerciseId)) return;
-    setSelectedExerciseId(exerciseId);
-    const previous = latestSetFor(exerciseId);
-    setSetForm({ weightKg: previous ? String(previous.weightKg) : "", reps: "", rir: "2", type: "working" });
-    setSetError("");
-    setSheet("set");
-  };
-
-  const stepSetFormValue = (field: "weightKg" | "reps", amount: number) => {
-    setSetError("");
-    setSetForm((current) => {
-      const minimum = field === "reps" ? 1 : 0;
-      const next = Math.max(minimum, (Number(current[field]) || 0) + amount);
-      return { ...current, [field]: String(next) };
-    });
-  };
 
   const startWorkout = (template?: Template) => {
     const base: ActiveWorkout = data.activeWorkout ?? {
@@ -1012,7 +1128,7 @@ export default function Home() {
   const logout = () => {
     localStorage.removeItem("rest-session");
     setSignedIn(false);
-    setTab("today");
+    setTab("workout");
     setWorkoutView("templates");
     setUsername("");
     setPassword("");
@@ -1136,6 +1252,8 @@ export default function Home() {
     setExerciseDraftSets([]);
     setExerciseNotes("");
     setShowExerciseNotes(false);
+    setDraftSetType("working");
+    setDraftRir("2");
   };
 
   const selectExerciseForLogging = (exerciseId: string) => {
@@ -1148,6 +1266,16 @@ export default function Home() {
     }]);
     setExerciseNotes("");
     setShowExerciseNotes(false);
+  };
+
+  // The single logging entry point: opens the sheet on the picker, or straight on
+  // an exercise when one of the day's cards was tapped.
+  const openExerciseSheet = (exerciseId?: string) => {
+    resetExerciseLogger();
+    setExerciseSearch("");
+    if (!data.activeWorkout) startWorkout();
+    if (exerciseId) selectExerciseForLogging(exerciseId);
+    setSheet("exercise");
   };
 
   const updateExerciseDraftSet = (id: string, field: "weightKg" | "reps", value: string) => {
@@ -1178,29 +1306,28 @@ export default function Home() {
 
   const saveExerciseDraft = (closeAfterSave: boolean) => {
     if (!data.activeWorkout || !exerciseToAdd || !exerciseDraftMeta) return;
-    if (data.activeWorkout.exercises.some((item) => item.exerciseId === exerciseToAdd)) {
-      showToast("التمرين موجود بالفعل في هذه الحصة");
-      resetExerciseLogger();
-      return;
-    }
     const now = new Date().toISOString();
     const sets: SetLog[] = exerciseDraftSets.flatMap((draft) => {
       const weightKg = readNumericInput(draft.weightKg);
       const reps = readNumericInput(draft.reps);
       if (weightKg === null || reps === null || weightKg < 0 || reps < 1) return [];
-      return [{ id: uid(), weightKg, reps, rir: 2, type: "working", completedAt: now }];
+      return [{ id: uid(), weightKg, reps, rir: Number(draftRir), type: draftSetType, completedAt: now }];
     });
     if (!sets.length) {
       showToast("أدخل الوزن والتكرارات أولًا");
       return;
     }
+    // Re-logging an exercise that is already in the day appends to it rather than
+    // creating a duplicate entry, so a card can be reopened to add more sets.
+    const alreadyLogged = data.activeWorkout.exercises.some((item) => item.exerciseId === exerciseToAdd);
+    const notes = exerciseNotes.trim() || undefined;
     const nextActive: ActiveWorkout = {
       ...data.activeWorkout,
-      exercises: [...data.activeWorkout.exercises, {
-        exerciseId: exerciseToAdd,
-        sets,
-        notes: exerciseNotes.trim() || undefined,
-      }],
+      exercises: alreadyLogged
+        ? data.activeWorkout.exercises.map((item) => item.exerciseId === exerciseToAdd
+          ? { ...item, sets: [...item.sets, ...sets], notes: notes ?? item.notes }
+          : item)
+        : [...data.activeWorkout.exercises, { exerciseId: exerciseToAdd, sets, notes }],
     };
     const nextExercises = data.exercises.some((exercise) => exercise.id === exerciseDraftMeta.id)
       ? data.exercises
@@ -1210,36 +1337,15 @@ export default function Home() {
     resetExerciseLogger();
     setExerciseSearch("");
     if (closeAfterSave) setSheet(null);
-    showToast(closeAfterSave ? "تم حفظ التمرين وجلساته" : "تم الحفظ — اختر التمرين التالي");
-  };
 
-  const saveSet = (event: FormEvent) => {
-    event.preventDefault();
-    if (!data.activeWorkout || !activeExercise || !currentExerciseId) return;
-    const weightKg = readNumericInput(setForm.weightKg);
-    const reps = readNumericInput(setForm.reps);
-    if (weightKg === null || reps === null || reps < 1 || weightKg < 0) {
-      setSetError("أدخل وزنًا وعدد تكرارات صحيحين قبل الحفظ.");
-      return;
+    // Only a working set can set a record — a heavy warm-up should not celebrate.
+    const heaviest = sets.filter((set) => set.type === "working").reduce((best, set) => Math.max(best, set.weightKg), 0);
+    const previousBest = getExercisePersonalBest(exerciseToAdd, sessionCutoff);
+    if (heaviest > 0 && (!previousBest || heaviest > previousBest.weightKg)) {
+      showToast(`رقم قياسي جديد — ${formatNumber(heaviest)} كغ`, undefined, "record");
+    } else {
+      showToast(closeAfterSave ? "تم حفظ التمرين وجلساته" : "تم الحفظ — اختر التمرين التالي");
     }
-    const set: SetLog = {
-      id: uid(),
-      weightKg,
-      reps,
-      rir: setForm.rir ? Number(setForm.rir) : undefined,
-      type: setForm.type,
-      completedAt: new Date().toISOString(),
-    };
-    const nextActive: ActiveWorkout = {
-      ...data.activeWorkout,
-      exercises: data.activeWorkout.exercises.map((item) =>
-        item.exerciseId === currentExerciseId ? { ...item, sets: [...item.sets, set] } : item,
-      ),
-    };
-    persist({ ...data, activeWorkout: nextActive });
-    setSetForm((current) => ({ weightKg: String(weightKg), reps: "", rir: current.rir, type: "working" }));
-    setSheet(null);
-    showToast("حُفظت المجموعة على هذا الجهاز");
   };
 
   const closeMealSheet = () => {
@@ -1301,7 +1407,8 @@ export default function Home() {
       protein,
       carbs,
       fat,
-      createdAt: new Date().toISOString(),
+      // Meals land on whichever day the Nutrition tab is showing.
+      createdAt: dateOnSelectedDay(selectedMealDate),
     };
     persist({ ...data, meals: [meal, ...data.meals] });
     closeMealSheet();
@@ -1415,272 +1522,164 @@ export default function Home() {
     );
   }
 
-  const todayWeekDays = lastSevenDays();
-  const weekDayKeys = new Set(todayWeekDays.map((day) => calendarDayKey(day)));
-  const weekSessions = sortedSessions.filter((session) => weekDayKeys.has(calendarDayKey(session.completedAt)));
-  const weekVolume = weekSessions.reduce((total, session) => total + workoutVolume(session.exercises), 0);
-  const lastTrainedDate = sortedSessions[0]?.completedAt;
-  const nutritionRemaining = data.nutritionTarget.calories - nutrition.calories;
   const calorieBand = progressBand(nutrition.calories, data.nutritionTarget.calories);
-  const hasNutritionTarget = Boolean(data.nutritionTarget.calories || data.nutritionTarget.protein || data.nutritionTarget.carbs || data.nutritionTarget.fat);
-
-  const todayContent = (
-    <>
-      <header className="daily-heading">
-        <div className="daily-date"><span className="pulse-dot" /> {todayLabel}</div>
-        <h1>اليوم، <em>بوضوح.</em></h1>
-        <p>أسبوعك، تمرينك، ووجباتك — بنظرة وحدة.</p>
-      </header>
-
-      <section className="today-week-strip" aria-label="أيام هذا الأسبوع">
-        {todayWeekDays.map((day) => {
-          const key = calendarDayKey(day);
-          const trained = sessionDayKeys.has(key);
-          const today = isToday(day.toISOString());
-          return (
-            <div className={`today-week-day${today ? " today" : ""}${trained ? " trained" : ""}`} key={key}>
-              <span>{ARABIC_WEEK_INITIALS[day.getDay()]}</span>
-              <b>{formatNumber(day.getDate())}</b>
-              <i />
-            </div>
-          );
-        })}
-      </section>
-
-      {data.activeWorkout ? (
-        <section className="today-card today-workout-card">
-          <div className="today-card-icon"><Activity size={22} /></div>
-          <div>
-            <p>تمرين اليوم</p>
-            <h2>{data.activeWorkout.name}</h2>
-            <span>{countLabel(activeSetCount, "مجموعة واحدة", "مجموعات")} · {formatNumber(activeVolume)} كغ</span>
-          </div>
-          <button className="today-card-action" onClick={() => setTab("workout")}>
-            <span>تابع</span><ChevronLeft size={18} />
-          </button>
-        </section>
-      ) : (
-        <section className="today-card today-workout-card">
-          <div className="today-card-icon"><Dumbbell size={22} /></div>
-          <div><p>تمرين اليوم</p><h2>لم تبدأ تمرينًا بعد</h2><span>سجّل مجموعاتك عندما تكون جاهزًا.</span></div>
-          <button className="today-card-action" onClick={() => startWorkout()}>
-            <span>ابدأ</span><ArrowLeft size={18} />
-          </button>
-        </section>
-      )}
-
-      <section className="today-card today-nutrition-card">
-        <div className="today-card-icon"><Utensils size={22} /></div>
-        <div>
-          <p>وجبات اليوم</p>
-          <h2>{todayMeals.length ? countLabel(todayMeals.length, "وجبة واحدة مسجلة", "وجبات مسجلة") : "لم تسجّل وجبة بعد"}</h2>
-          <span>
-            {data.nutritionTarget.calories
-              ? nutritionRemaining >= 0
-                ? `${formatNumber(nutritionRemaining)} kcal متبقية`
-                : `تجاوزت الهدف بـ${formatNumber(Math.abs(nutritionRemaining))} kcal`
-              : `${formatNumber(nutrition.calories)} kcal · ${formatNumber(nutrition.protein)} غ بروتين`}
-          </span>
-        </div>
-        <button className="today-card-action secondary" onClick={() => openMealSheet()}>
-          <span>أضف</span><Plus size={18} />
-        </button>
-      </section>
-
-      {sortedSessions.length > 0 && (
-        <section className="stat-row" aria-label="ملخص هذا الأسبوع">
-          <article><span>حصص الأسبوع</span><b>{formatNumber(weekSessions.length)}</b></article>
-          <article><span>حجم الأسبوع</span><b dir="ltr">{formatNumber(weekVolume)} <small>كغ</small></b></article>
-          <article><span>آخر تمرين</span><b>{lastTrainedDate ? (isToday(lastTrainedDate) ? "اليوم" : daysAgoLabel(daysSince(lastTrainedDate))) : "—"}</b></article>
-        </section>
-      )}
-
-      {personalRecords.length > 0 && (
-        <button type="button" className="insight-card today-insight" onClick={() => setTab("progress")}>
-          <Trophy size={20} aria-hidden="true" />
-          <div>
-            <h2>أقوى رقم مسجّل: {personalRecords[0].name}</h2>
-            <p dir="ltr">{formatNumber(personalRecords[0].weightKg)} kg × {formatNumber(personalRecords[0].reps)} <span dir="rtl">· {formatDate(personalRecords[0].date)}</span></p>
-          </div>
-        </button>
-      )}
-    </>
-  );
 
   const workoutContent = (
     <>
-      <header className="page-heading">
-        <div><p className="eyebrow">بلا جداول معقدة</p><h1>التمرين</h1></div>
+      <header className="page-header">
+        <div>
+          <h1>جدول التمرين</h1>
+          <p>تابع تمارينك اليومية وسجّل أداءك</p>
+        </div>
         <button
-          className="header-action"
+          className="page-header-action"
           onClick={() => setWorkoutView(workoutView === "equipment" ? "templates" : "equipment")}
           aria-label={workoutView === "equipment" ? "العودة للتمرين" : "إدارة المعدات"}
         >
-          {workoutView === "equipment" ? <ChevronLeft size={18} /> : <Settings2 size={18} />}
+          {workoutView === "equipment" ? <ChevronLeft size={16} /> : <Settings2 size={16} />}
           <span>{workoutView === "equipment" ? "التمرين" : "المعدات"}</span>
         </button>
       </header>
 
       {workoutView === "templates" && (
-      <section className="workout-day-browser" aria-label="سجل التمرين حسب اليوم">
-        <div className="workout-day-browser-head">
-          <div><small>سجل الأيام</small><strong>{workoutWeekLabel}</strong></div>
-          <div className="workout-week-actions">
-            <button type="button" onClick={() => selectWorkoutDate(shiftDate(selectedWorkoutDate, -7))} aria-label="الأسبوع السابق"><ChevronRight size={17} /></button>
-            <button type="button" className="workout-today-button" onClick={() => selectWorkoutDate(new Date())}>اليوم</button>
-            <button type="button" onClick={() => selectWorkoutDate(shiftDate(selectedWorkoutDate, 7))} aria-label="الأسبوع التالي"><ChevronLeft size={17} /></button>
-          </div>
-        </div>
-        <div className="workout-day-rail">
-          {workoutWeekDays.map((day) => {
-            const key = calendarDayKey(day);
-            const selected = key === calendarDayKey(selectedWorkoutDate);
-            const trained = sortedSessions.some((session) => calendarDayKey(session.completedAt) === key);
-            return (
-              <button type="button" key={key} className={`${selected ? "selected " : ""}${trained ? "trained" : ""}`} onClick={() => selectWorkoutDate(day)} aria-pressed={selected} aria-label={formatDayHeading(day.toISOString())}>
-                <span>{ARABIC_WEEK_DAYS[day.getDay()]}</span>
-                <b>{day.getDate()}</b>
-                <i />
-              </button>
-            );
-          })}
-        </div>
-        {activeSetCount > 0 && (
-          <div className="stat-row" aria-label="ملخص الحصة">
-            <article><span>عدات</span><b>{formatNumber(activeRepCount)}</b></article>
-            <article><span>جلسات</span><b>{formatNumber(activeSetCount)}</b></article>
-            <article><span>الوزن المرفوع</span><b>{formatNumber(activeVolume)} <small>كغ</small></b></article>
-          </div>
-        )}
-        <div className="workout-day-log">
-          <div className="workout-day-log-head">
-            <strong>{formatDayHeading(selectedWorkoutDate.toISOString())}</strong>
-            <span>{countLabel(selectedWorkoutDaySessions.length, "حصة واحدة", "حصص")}</span>
-          </div>
+        <>
+          <DaySelector
+            selectedDay={selectedWorkoutDate}
+            onSelect={selectWorkoutDate}
+            countFor={(day) => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(day)).length}
+            label="اختيار يوم التمرين"
+          />
 
-          {otherSessionsForDay.map((session) => (
-            <article className="workout-history-card" key={session.id}>
-              <div className="workout-history-title">
-                <div><h2>{session.name}</h2><p>{countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</p></div>
-                <b>{formatNumber(workoutVolume(session.exercises))}<small> kg</small></b>
+          <p className="day-section-label">
+            تمارين يوم {formatDayHeading(selectedWorkoutDate.toISOString())}
+          </p>
+
+          <section className="session-stats" aria-label="ملخص الحصة">
+            <div className="session-stats-figures">
+              <div>
+                <span>أرقام قياسية</span>
+                <b>{formatNumber(activeRecordCount)}</b>
               </div>
-              <div className="workout-history-exercises">
-                {session.exercises.map((logged) => {
-                  const exercise = exerciseCatalog.find((item) => item.id === logged.exerciseId);
-                  const workingSets = logged.sets.filter((set) => set.type === "working");
-                  const heaviest = workingSets.length ? Math.max(...workingSets.map((set) => set.weightKg)) : 0;
-                  return exercise ? (
-                    <div key={logged.exerciseId}>
-                      <span><Dumbbell size={14} />{exercise.name}</span>
-                      <b>{formatNumber(logged.sets.length)} × {formatNumber(heaviest)} kg</b>
-                    </div>
-                  ) : null;
-                })}
+              <div>
+                <span>المجموعات</span>
+                <b>{formatNumber(activeSetCount)}</b>
               </div>
-            </article>
-          ))}
-
-          {data.activeWorkout ? (
-            data.activeWorkout.exercises.length === 0 ? (
-              <EmptyState icon={<CirclePlus size={27} />} title="ابدأ بإضافة تمرين" body="اختر قسم العضلة، ثم اختر التمرين وابدأ تسجيل مجموعاتك." action={<AppButton onClick={() => setSheet("exercise")} icon={<Plus size={18} />}>إضافة تمرين</AppButton>} />
-            ) : (
-              <>
-                <div className="exercise-tabs" aria-label="تمارين الحصة">
-                  {data.activeWorkout.exercises.map((item) => {
-                    const exercise = exerciseCatalog.find((entry) => entry.id === item.exerciseId);
-                    const tabReps = item.sets.reduce((total, set) => total + set.reps, 0);
-                    return exercise ? <button key={item.exerciseId} className={currentExerciseId === item.exerciseId ? "selected" : ""} onClick={() => setSelectedExerciseId(item.exerciseId)}><span>{exercise.name}</span><b>{formatNumber(item.sets.length)} {item.sets.length === 1 ? "جلسة" : "جلسات"}</b><b>{formatNumber(tabReps)} {tabReps === 1 ? "عدة" : "عدات"}</b></button> : null;
-                  })}
-                  <button className="add-exercise-tab" onClick={() => setSheet("exercise")} aria-label="إضافة تمرين"><Plus size={17} /></button>
-                </div>
-                {activeExerciseMeta && activeExercise && (() => {
-                  const loggedReps = activeExercise.sets.reduce((total, set) => total + set.reps, 0);
-                  const loggedVolume = activeExercise.sets.reduce((total, set) => total + set.weightKg * set.reps, 0);
-                  const previous = latestPerformanceFor(activeExerciseMeta.id, sessionCutoff);
-                  const personalBest = getExercisePersonalBest(activeExerciseMeta.id, sessionCutoff);
-                  return (
-                    <article className="exercise-log-card current workout-focus-card">
-                      <div className="exercise-log-title">
-                        <div><p className="eyebrow">{muscleGroupLabel(activeExerciseMeta.primaryMuscle)} · هدف {activeExerciseMeta.repMin}–{activeExerciseMeta.repMax}<em className="current-flag">الحالي</em></p><h2>{activeExerciseMeta.name}</h2></div>
-                        <div className="exercise-log-actions">
-                          <button type="button" className="card-delete" onClick={() => removeExerciseFromWorkout(activeExerciseMeta.id)} aria-label={`إزالة ${activeExerciseMeta.name} من الحصة`}><Trash2 size={18} /></button>
-                          <Dumbbell size={22} />
-                        </div>
-                      </div>
-
-                      <section className="today-block" aria-label={`سجل اليوم · ${activeExerciseMeta.name}`}>
-                        <header><span>سجل اليوم</span></header>
-                        <div className="today-figures">
-                          <div><b>{formatNumber(activeExercise.sets.length)}</b><span>جلسات</span></div>
-                          <div><b>{formatNumber(loggedReps)}</b><span>عدات</span></div>
-                          <div><b>{formatNumber(loggedVolume)}</b><span>كغ</span></div>
-                        </div>
-                        {activeExercise.sets.length === 0 ? (
-                          <p className="no-sets">لم تسجّل مجموعة بعد — ابدأ بأول واحدة.</p>
-                        ) : (
-                          <div className="today-sets">
-                            {(() => {
-                              let workingIndex = 0;
-                              return activeExercise.sets.map((set) => {
-                                if (set.type === "working") workingIndex += 1;
-                                return (
-                                  <div className={`today-set${set.type === "warmup" ? " is-warmup" : ""}`} key={set.id}>
-                                    <span>{set.type === "warmup" ? "إحماء" : `مجموعة ${workingIndex}`}</span>
-                                    <b dir="ltr">{formatNumber(set.weightKg)} <small>كغ</small></b>
-                                    <b dir="ltr">× {formatNumber(set.reps)}</b>
-                                    <small>RIR {set.rir ?? "—"}</small>
-                                  </div>
-                                );
-                              });
-                            })()}
-                          </div>
-                        )}
-                        <button type="button" className="add-set-wide" onClick={() => openCompactSetSheet(activeExerciseMeta.id)}><Plus size={16} /> إضافة جلسة</button>
-                      </section>
-
-                      {activeExercise.notes && <p className="exercise-note-callout">{activeExercise.notes}</p>}
-                      <div className="focus-history-line" aria-label="ملخص أداء التمرين السابق">
-                        <span><History size={14} /> {previous ? `آخر أداء: ${formatNumber(previous.set.weightKg)} كغ × ${formatNumber(previous.set.reps)} · ${daysAgoLabel(daysSince(previous.date))}` : "أول مرة تسجّل هذا التمرين"}</span>
-                        {personalBest && <span className="pb"><Sparkles size={14} /> أفضل: {formatNumber(personalBest.weightKg)} كغ × {formatNumber(personalBest.reps)}</span>}
-                      </div>
-                    </article>
-                  );
-                })()}
-                <button type="button" className="stack-add-exercise" onClick={() => setSheet("exercise")}><Plus size={17} /> إضافة تمرين آخر</button>
-              </>
-            )
-          ) : otherSessionsForDay.length === 0 ? (
-            <div className="workout-day-empty">
-              <Dumbbell size={18} />
-              <span>لا يوجد تمرين مسجل في هذا اليوم</span>
-              <button type="button" className="text-action" onClick={() => startWorkout()}><Plus size={16} /> إضافة تمرين</button>
+              <div>
+                <span>الحجم</span>
+                <b>{formatNumber(activeVolume)}<small>كغ</small></b>
+              </div>
             </div>
-          ) : null}
-        </div>
-      </section>
-      )}
+            <div className="session-stats-meta">
+              <span><b>{formatNumber(activeRepCount)}</b> تكرار</span>
+              <span>
+                <Dumbbell size={14} />
+                <b>{formatNumber(data.activeWorkout?.exercises.length ?? 0)}</b> تمرين
+              </span>
+              {volumeDelta !== null && (
+                <span className={`delta${volumeDelta < 0 ? " down" : ""}`}>
+                  {volumeDelta < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
+                  {formatNumber(Math.abs(volumeDelta))}%
+                </span>
+              )}
+            </div>
+          </section>
 
-      {workoutView === "templates" && !data.activeWorkout && (
-        <section className="section-block">
-          <div className="section-title">
-            <div><p className="eyebrow">قوالبك</p><h2>ابدأ من قالب</h2></div>
-            <button className="text-action" onClick={openTemplateSheet}><Plus size={17} /> قالب جديد</button>
+          <div className="session-actions">
+            <button type="button" className="session-log-button" onClick={() => openExerciseSheet()}>
+              <Plus size={18} /> سجّل تمرين
+            </button>
+            <button
+              type="button"
+              className={`session-timer${timerRunning ? " running" : ""}`}
+              onClick={() => setTimerRunning((running) => !running)}
+              aria-label={timerRunning ? "إيقاف المؤقّت" : "تشغيل المؤقّت"}
+            >
+              {timerRunning ? <Pause size={17} /> : <Play size={17} />}
+              <span className="timer-value">{formatClock(timerSeconds)}</span>
+            </button>
           </div>
-          {data.templates.length === 0 ? (
-            <EmptyState icon={<ClipboardList size={27} />} title="ثبّت روتينك المعتاد" body="احفظ تمارينك المتكررة في قالب، ثم ابدأها بخطوة واحدة." action={<AppButton onClick={openTemplateSheet} icon={<Plus size={18} />}>إنشاء قالب</AppButton>} />
+
+          {data.activeWorkout && data.activeWorkout.exercises.length > 0 ? (
+            <div className="exercise-summary-list">
+              {data.activeWorkout.exercises.map((item) => {
+                const exercise = exerciseCatalog.find((entry) => entry.id === item.exerciseId);
+                if (!exercise) return null;
+                const equipment = data.equipment.find((entry) => entry.id === exercise.equipmentId);
+                const photo = equipment?.photos?.[0];
+                const weights = item.sets.map((set) => set.weightKg);
+                const reps = item.sets.map((set) => set.reps);
+                const range = (values: number[]) => {
+                  if (!values.length) return "—";
+                  const min = Math.min(...values);
+                  const max = Math.max(...values);
+                  return min === max ? formatNumber(min) : `${formatNumber(min)}-${formatNumber(max)}`;
+                };
+                return (
+                  <button
+                    type="button"
+                    className="exercise-summary"
+                    key={item.exerciseId}
+                    onClick={() => openExerciseSheet(exercise.id)}
+                    aria-label={`تعديل ${exercise.name}`}
+                  >
+                    <span className="exercise-summary-icon">
+                      {photo ? <img src={photo} alt="" /> : <Dumbbell size={24} />}
+                    </span>
+                    <span className="exercise-summary-title">
+                      <strong>{exercise.name}</strong>
+                      <small>{muscleGroupLabel(exercise.primaryMuscle)}</small>
+                    </span>
+                    <span className="exercise-summary-figures">
+                      <div><span>مجموعات</span><b>{formatNumber(item.sets.length)}</b></div>
+                      <div><span>تكرارات</span><b dir="ltr">{range(reps)}</b></div>
+                      <div><span>وزن</span><b dir="ltr">{range(weights)} <small>كغ</small></b></div>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           ) : (
-            <div className="template-list">
-              {data.templates.map((template) => (
-                <article className="template-card" key={template.id}>
-                  <div className="template-symbol"><ClipboardList size={22} /></div>
-                  <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
-                  <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
-                  <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
+            <EmptyState
+              icon={<Dumbbell size={26} />}
+              title="لا يوجد تمرين في هذا اليوم"
+              body="اختر تمرينك وسجّل مجموعاتك — يبدأ سجلك من هنا."
+              action={<AppButton onClick={() => openExerciseSheet()} icon={<Plus size={18} />}>سجّل تمرين</AppButton>}
+            />
+          )}
+
+          {otherSessionsForDay.length > 0 && (
+            <section className="section-block">
+              <div className="section-title"><div><h2>حصص أخرى في هذا اليوم</h2></div></div>
+              {otherSessionsForDay.map((session) => (
+                <article className="workout-history-card" key={session.id}>
+                  <div className="workout-history-title">
+                    <div><h2>{session.name}</h2><p>{countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</p></div>
+                    <b>{formatNumber(workoutVolume(session.exercises))}<small> كغ</small></b>
+                  </div>
                 </article>
               ))}
-            </div>
+            </section>
           )}
-        </section>
+
+          {data.templates.length > 0 && !data.activeWorkout && (
+            <section className="section-block">
+              <div className="section-title">
+                <div><h2>ابدأ من قالب</h2></div>
+                <button className="text-action" onClick={openTemplateSheet}><Plus size={17} /> قالب جديد</button>
+              </div>
+              <div className="template-list">
+                {data.templates.map((template) => (
+                  <article className="template-card" key={template.id}>
+                    <div className="template-symbol"><ClipboardList size={22} /></div>
+                    <div><h2>{template.name}</h2><p>{template.exerciseIds.length ? `${template.exerciseIds.length} تمارين` : "جدول فارغ — أضف تمارينك متى شئت"}</p></div>
+                    <button className="start-mini" onClick={() => startWorkout(template)} aria-label={`بدء ${template.name}`}><span>ابدأ</span><ArrowLeft size={18} /></button>
+                    <button className="card-delete" onClick={() => deleteTemplate(template.id)} aria-label={`حذف ${template.name}`}><Trash2 size={18} /></button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {workoutView === "equipment" && (
@@ -1727,235 +1726,391 @@ export default function Home() {
 
   const nutritionContent = (
     <>
-      <header className="page-heading">
-        <div><p className="eyebrow">سجل يدوي واضح</p><h1>التغذية</h1></div>
-        <button className="header-action" onClick={openTargetSheet} aria-label="ضبط أهداف التغذية"><Target size={18} /><span>الأهداف</span></button>
+      <header className="page-header">
+        <div>
+          <h1>التغذية</h1>
+          <p>تابع وجباتك اليومية والسعرات الحرارية</p>
+        </div>
       </header>
-      <section className="nutrition-summary">
-        <div className={`calorie-ring${data.nutritionTarget.calories ? "" : " empty"}${calorieBand.tone ? ` ${calorieBand.tone}` : ""}`} style={{ "--progress": `${calorieBand.width}%` } as React.CSSProperties}>
-          <div><span>السعرات</span><strong>{formatNumber(nutrition.calories)}</strong><small>{data.nutritionTarget.calories ? `من ${formatNumber(data.nutritionTarget.calories)}` : "حدد هدفك"}</small>{data.nutritionTarget.calories ? <small className="ring-pct" dir="ltr">{calorieBand.percent}%</small> : null}</div>
+
+      <DaySelector
+        selectedDay={selectedMealDate}
+        onSelect={setSelectedMealDate}
+        countFor={(day) => data.meals.filter((meal) => calendarDayKey(meal.createdAt) === calendarDayKey(day)).length}
+        label="اختيار يوم الوجبات"
+      />
+
+      <section className="nutrient-card calorie-card" aria-label="السعرات الحرارية">
+        <div className="nutrient-head">
+          <span className="nutrient-name"><span className="nutrient-emoji" aria-hidden="true">🔥</span> السعرات الحرارية</span>
+          <button type="button" className="nutrient-goal" onClick={openTargetSheet}>
+            <SlidersHorizontal size={14} /> الهدف
+          </button>
         </div>
-        <div className="macro-summary">
-          <p className="eyebrow">ملخص اليوم</p>
-          <h2>{data.nutritionTarget.calories ? (nutritionRemaining >= 0 ? `${formatNumber(nutritionRemaining)} kcal متبقية` : `تجاوزت بـ ${formatNumber(Math.abs(nutritionRemaining))} kcal`) : "حدّد أهدافك أولًا"}</h2>
-          <button className="text-action" onClick={openTargetSheet}><Settings2 size={16} /> ضبط الأهداف</button>
+        <div
+          className="nutrient-track"
+          role="progressbar"
+          aria-valuenow={calorieBand.percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`السعرات: ${calorieBand.percent}% من الهدف`}
+        >
+          <span style={{ width: `${calorieBand.width}%` }} />
         </div>
+        <p className="nutrient-value" dir="rtl">
+          <b>{formatNumber(nutrition.calories)}</b>
+          <span dir="ltr">/ {formatNumber(data.nutritionTarget.calories)} kcal</span>
+        </p>
       </section>
+
       <div className="macro-grid">
         {([
-          ["بروتين", nutrition.protein, data.nutritionTarget.protein, "protein"],
-          ["كربوهيدرات", nutrition.carbs, data.nutritionTarget.carbs, "carbs"],
-          ["دهون", nutrition.fat, data.nutritionTarget.fat, "fat"],
-        ] as const).map(([label, current, target, macro]) => {
+          ["البروتين", "🍗", nutrition.protein, data.nutritionTarget.protein, "protein"],
+          ["الدهون", "🥑", nutrition.fat, data.nutritionTarget.fat, "fat"],
+          ["الكارب", "🌿", nutrition.carbs, data.nutritionTarget.carbs, "carbs"],
+        ] as const).map(([label, emoji, current, target, macro]) => {
           const band = progressBand(current, target);
           return (
-            <article className={`macro-card ${macro}${band.tone ? ` ${band.tone}` : ""}`} key={label}>
-              <div><span className="macro-label"><i className="macro-dot" />{label}</span><b>{formatNumber(current)} غ</b></div>
-              <div className="macro-track" role="progressbar" aria-valuenow={band.percent} aria-valuemin={0} aria-valuemax={100} aria-label={`${label}: ${band.percent}% من الهدف`}><span style={{ width: `${band.width}%` }} /></div>
-              <small>{target ? <><span className="macro-pct" dir="ltr">{band.percent}%</span>{` · من ${formatNumber(target)} غ`}</> : "لا يوجد هدف"}</small>
+            <article className={`nutrient-card ${macro}`} key={label}>
+              <div className="nutrient-head">
+                <span className="nutrient-name"><span className="nutrient-emoji" aria-hidden="true">{emoji}</span> {label}</span>
+              </div>
+              <div
+                className="nutrient-track"
+                role="progressbar"
+                aria-valuenow={band.percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${label}: ${band.percent}% من الهدف`}
+              >
+                <span style={{ width: `${band.width}%` }} />
+              </div>
+              <p className="nutrient-value" dir="rtl">
+                <b>{formatNumber(current)}</b>
+                <span dir="ltr">/ {formatNumber(target)} g</span>
+              </p>
             </article>
           );
         })}
       </div>
-      {hasNutritionTarget && (
-        <ul className="progress-legend" aria-label="دلالة ألوان التقدم">
-          <li className="low"><i />أقل من النصف</li>
-          <li className="mid"><i />في الطريق</li>
-          <li className="hit"><i />وصلت الهدف</li>
-          <li className="over"><i />تجاوزت</li>
-        </ul>
-      )}
+
       <section className="section-block">
-        <div className="section-title"><div><p className="eyebrow">وجبات اليوم</p><h2>ما سجلته</h2></div><button className="text-action" onClick={() => openMealSheet()}><Plus size={17} /> إضافة</button></div>
-        {todayMeals.length === 0 ? <EmptyState icon={<Utensils size={27} />} title="أضف وجبتك الأولى" body="أدخل السعرات والماكروز التي تعرفها، بلا تخمين ولا إلزام بصورة." action={<AppButton onClick={() => openMealSheet()} icon={<Plus size={18} />}>إضافة وجبة</AppButton>} /> : <div className="meal-list">{todayMeals.map((meal) => <article className="meal-card" key={meal.id}><div className="meal-icon"><Utensils size={19} /></div><div><p>{meal.category} · {formatDate(meal.createdAt)}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div><strong>{formatNumber(meal.calories)}<small> kcal</small></strong><button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button><button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button></article>)}</div>}
+        <div className="section-title">
+          <div><h2>وجبات {isToday(selectedMealDate.toISOString()) ? "اليوم" : formatDate(selectedMealDate.toISOString())}</h2></div>
+          <button className="meal-add-button" onClick={() => openMealSheet()}><Plus size={16} /> إضافة وجبة</button>
+        </div>
+        {selectedDayMeals.length === 0 ? (
+          <div className="meals-empty">
+            <Utensils size={40} strokeWidth={1.5} />
+            <p>لا توجد وجبات مسجلة</p>
+          </div>
+        ) : (
+          <div className="meal-list">
+            {selectedDayMeals.map((meal) => (
+              <article className="meal-card" key={meal.id}>
+                <div className="meal-icon"><Utensils size={19} /></div>
+                <div>
+                  <p>{meal.category} · {formatTime(meal.createdAt)}</p>
+                  <h2>{meal.name}</h2>
+                  <span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span>
+                </div>
+                <strong>{formatNumber(meal.calories)}<small> kcal</small></strong>
+                <button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button>
+                <button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
-      {pastMealDays.length > 0 && (
-        <section className="section-block">
-          <div className="section-title"><div><p className="eyebrow">سجلك الغذائي</p><h2>أيام سابقة</h2></div></div>
-          {visiblePastMealDays.map((day) => (
-            <div className="day-group" key={day.key}>
-              <div className="day-group-head"><span>{formatDayHeading(day.meals[0].createdAt)}</span><b>{formatNumber(day.calories)} kcal</b></div>
-              <div className="meal-list">
-                {day.meals.map((meal) => (
-                  <article className="meal-card" key={meal.id}>
-                    <div className="meal-icon"><Utensils size={20} /></div>
-                    <div><p>{meal.category}</p><h2>{meal.name}</h2><span>{formatNumber(meal.protein)} ب · {formatNumber(meal.carbs)} ك · {formatNumber(meal.fat)} د</span></div>
-                    <strong>{formatNumber(meal.calories)}<small> kcal</small></strong>
-                    <button className="card-edit" onClick={() => openMealSheet(meal)} aria-label={`تعديل ${meal.name}`}><Pencil size={16} /></button>
-                    <button className="card-delete" onClick={() => deleteMeal(meal.id)} aria-label={`حذف ${meal.name}`}><Trash2 size={18} /></button>
-                  </article>
-                ))}
-              </div>
-            </div>
-          ))}
-          {pastMealDays.length > 3 && (
-            <button type="button" className="history-reveal" onClick={() => setMealHistoryExpanded((expanded) => !expanded)}>
-              {mealHistoryExpanded ? "عرض أحدث 3 أيام فقط" : `عرض ${formatNumber(pastMealDays.length - 3)} أيام أقدم`}
-              <ChevronDown className={mealHistoryExpanded ? "is-open" : ""} size={17} />
-            </button>
-          )}
-        </section>
-      )}
     </>
   );
 
   const progressContent = (
     <>
-      <header className="page-heading"><div><p className="eyebrow">ارجع لأي يوم</p><h1>السجل</h1></div><BarChart3 className="header-icon" size={24} /></header>
-
-      <section className="month-calendar" aria-label="اختيار تاريخ من السجل">
-        <button
-          type="button"
-          className="calendar-trigger"
-          onClick={() => setCalendarExpanded((current) => !current)}
-          aria-expanded={calendarExpanded}
-        >
-          <span className="calendar-trigger-icon"><Calendar size={18} /></span>
-          <span className="calendar-trigger-label">
-            <strong>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</strong>
-            <small>{selectedDaySessions.length ? countLabel(selectedDaySessions.length, "حصة واحدة", "حصص") : "لا يوجد تمرين"}</small>
-          </span>
-          <ChevronDown className="calendar-trigger-chevron" size={19} />
-        </button>
-
-        {calendarExpanded && (
-          <div className="month-calendar-body">
-            <div className="month-calendar-head">
-              <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, -1))} aria-label="الشهر السابق"><ChevronRight size={19} /></button>
-              <strong>{historyMonthLabel}</strong>
-              <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, 1))} aria-label="الشهر التالي"><ChevronLeft size={19} /></button>
-              <button type="button" className="today-jump" onClick={() => { setHistoryDateOverride(new Date()); setExpandedSessionId(null); setCalendarExpanded(false); }}>اليوم</button>
-            </div>
-
-            <div className="month-weekdays" aria-hidden="true">
-              {ARABIC_WEEK_INITIALS.map((initial, index) => <span key={ARABIC_WEEK_DAYS[index]}>{initial}</span>)}
-            </div>
-
-            <div className="month-grid" role="group" aria-label="أيام الشهر">
-              {historyMonthCells.map((day, index) => {
-                if (!day) return <span className="month-blank" key={`blank-${index}`} />;
-                const key = calendarDayKey(day);
-                const selected = key === calendarDayKey(selectedHistoryDate);
-                const today = isToday(day.toISOString());
-                const trained = sessionDayKeys.has(key);
-                return (
-                  <button
-                    type="button"
-                    key={key}
-                    className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${trained ? " trained" : ""}`}
-                    onClick={() => { setHistoryDateOverride(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
-                    aria-pressed={selected}
-                    aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}`}
-                  >
-                    <b>{formatNumber(day.getDate())}</b>
-                    <i />
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="month-legend">
-              <span><i /> يوم تمرين</span>
-              <b>{countLabel(monthSessionCount, "حصة واحدة هذا الشهر", "حصص هذا الشهر")}</b>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="day-log">
-        <div className="day-log-head">
-          <h2>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</h2>
-          {selectedDaySessions.length > 0 && <span>{countLabel(selectedDaySessions.length, "حصة واحدة", "حصص")}</span>}
+      <header className="page-header">
+        <div>
+          <h1>التقدم</h1>
+          <p>تابع تقدمك وسلسلة أيامك المتتالية</p>
         </div>
+      </header>
 
-        {selectedDaySessions.length ? selectedDaySessions.map((session) => {
-          const expanded = expandedSessionId === session.id;
-          return (
-            <article className={`log-card${expanded ? " expanded" : ""}`} key={session.id}>
-              <button
-                type="button"
-                className="log-card-head"
-                onClick={() => setExpandedSessionId(expanded ? null : session.id)}
-                aria-expanded={expanded}
-              >
-                <span className="log-symbol"><Dumbbell size={19} /></span>
-                <span className="log-title">
-                  <strong>{session.name}</strong>
-                  <small>{formatTime(session.completedAt)} · {countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</small>
-                </span>
-                <ChevronDown className="log-chevron" size={19} />
-              </button>
+      <div className="progress-stats">
+        <article className="progress-stat-card">
+          <span className="progress-stat-icon" style={{ color: "var(--violet)" }}><Dumbbell size={15} /></span>
+          <strong dir="ltr">{formatNumber(totalLoggedVolume)}</strong>
+          <span>الحجم (كجم)</span>
+        </article>
+        <article className="progress-stat-card">
+          <span className="progress-stat-icon" style={{ color: "var(--accent)" }}><Activity size={15} /></span>
+          <strong>{formatNumber(data.sessions.length)}</strong>
+          <span>الجلسات</span>
+        </article>
+        <article className="progress-stat-card">
+          <span className="progress-stat-icon" style={{ color: "var(--sand)" }}><Repeat size={15} /></span>
+          <strong>{formatNumber(totalLoggedReps)}</strong>
+          <span>العدات</span>
+        </article>
+      </div>
 
-              {expanded && (
-                <div className="log-body">
-                  {session.exercises.map((exercise) => {
-                    const meta = exerciseCatalog.find((item) => item.id === exercise.exerciseId);
-                    let workingIndex = 0;
-                    return (
-                      <div className="log-exercise" key={exercise.exerciseId}>
-                        <div className="log-exercise-head">
-                          <strong>{meta?.name ?? "تمرين محذوف"}</strong>
-                          <small>{countLabel(exercise.sets.length, "مجموعة واحدة", "مجموعات")}</small>
-                        </div>
-                        <div className="log-sets">
-                          {exercise.sets.map((set) => {
-                            if (set.type === "working") workingIndex += 1;
-                            return (
-                              <span className={`log-set${set.type === "warmup" ? " warmup" : ""}`} key={set.id}>
-                                <i>{set.type === "warmup" ? "إحماء" : formatNumber(workingIndex)}</i>
-                                <b dir="ltr">{formatNumber(set.weightKg)} kg × {formatNumber(set.reps)}</b>
-                              </span>
-                            );
-                          })}
-                        </div>
-                        {exercise.notes && <p className="log-note">{exercise.notes}</p>}
-                      </div>
-                    );
-                  })}
-                  <div className="log-card-footer">
-                    <span>حجم العمل <b dir="ltr">{formatNumber(workoutVolume(session.exercises))} kg</b></span>
-                    <button type="button" onClick={() => deleteSession(session.id)}><Trash2 size={15} /> حذف الحصة</button>
-                  </div>
-                </div>
-              )}
-            </article>
-          );
-        }) : (
-          <div className="day-log-empty">
-            <Dumbbell size={22} />
-            <strong>لا يوجد تمرين في هذا اليوم</strong>
-            <span>الأيام المعلّمة بنقطة فيها حصص مسجلة.</span>
-          </div>
-        )}
-      </section>
-
-      {personalRecords.length > 0 && (
-        <section className="section-block">
-          <div className="section-title"><div><p className="eyebrow">أفضل ما رفعت</p><h2>أرقامك القياسية</h2></div></div>
-          <div className="record-list">
-            {personalRecords.map((record, index) => (
-              <article className="record-row" key={record.exerciseId}>
-                <span className={`record-rank${index === 0 ? " top" : ""}`}>{index === 0 ? <Trophy size={15} /> : formatNumber(index + 1)}</span>
-                <div><strong>{record.name}</strong><small>{formatDate(record.date)}</small></div>
-                <b dir="ltr">{formatNumber(record.weightKg)} kg × {formatNumber(record.reps)}</b>
-              </article>
+      <section className="streak-card" aria-label="سلسلة الأيام">
+        <div className="streak-card-head">
+          <span className="streak-card-title"><Flame size={14} /> سلسلة الأيام</span>
+        </div>
+        <div className="streak-body">
+          <div className="streak-day-strip" role="group" aria-label="آخر ستة أيام">
+            {streakDayChips.map(({ key, day, trained, today }) => (
+              <div className={`streak-day${today ? " is-today" : ""}`} key={key}>
+                <span>{today ? "اليوم" : ARABIC_WEEK_INITIALS[day.getDay()]}</span>
+                <b>{day.getDate()}</b>
+                {trained ? <Check size={11} /> : <i className="streak-day-empty" />}
+              </div>
             ))}
           </div>
-        </section>
-      )}
-
-      <section className="section-block">
-        <div className="section-title"><div><p className="eyebrow">منذ البداية</p><h2>الإجمالي</h2></div></div>
-        <div className="totals-grid">
-          <article><Dumbbell size={17} /><span>الحصص</span><strong>{formatNumber(data.sessions.length)}</strong></article>
-          <article><Activity size={17} /><span>مجموعات العمل</span><strong>{formatNumber(totalWorkingSets)}</strong></article>
-          <article><TrendingUp size={17} /><span>الحجم الكلي</span><strong dir="ltr">{formatNumber(totalLoggedVolume)}<small>kg</small></strong></article>
+          <div className="streak-number">
+            <strong>{formatNumber(currentStreak)}</strong>
+            <span>أطول سلسلة أيام متتالية</span>
+          </div>
         </div>
+        <p className="streak-note"><Info size={11} /> تستمر السلسلة طالما لم تتوقف 3 أيام متتالية</p>
       </section>
+
+      <section className="section-block week-review-block">
+        <div className="week-review-head">
+          <span className="week-review-label">السجل</span>
+          <div className="week-review-controls">
+            <button
+              type="button"
+              className={`week-control-btn${weekMuscleFilter !== "All" ? " active" : ""}`}
+              onClick={() => { setWeekRangeMenuOpen(false); setWeekFilterMenuOpen((open) => !open); }}
+              aria-expanded={weekFilterMenuOpen}
+            >
+              <Filter size={13} /> فلتر
+            </button>
+            <button
+              type="button"
+              className={`week-control-btn${weekOnlyTrained ? " active" : ""}`}
+              onClick={() => setWeekOnlyTrained((only) => !only)}
+              aria-pressed={weekOnlyTrained}
+            >
+              <Check size={13} /> أيام تمرين فقط
+            </button>
+            <button
+              type="button"
+              className="week-control-btn"
+              onClick={() => { setWeekFilterMenuOpen(false); setWeekRangeMenuOpen((open) => !open); }}
+              aria-expanded={weekRangeMenuOpen}
+            >
+              {weekRangeLabel(weekRangeDays)}
+              {weekRangeMenuOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {weekFilterMenuOpen && (
+          <div className="filter-rail week-filter-rail" role="group" aria-label="فلترة حسب العضلة">
+            {(["All", ...MUSCLE_GROUPS] as const).map((group) => (
+              <button type="button" key={group} className={weekMuscleFilter === group ? "selected" : ""} onClick={() => { setWeekMuscleFilter(group); setWeekFilterMenuOpen(false); }}>
+                {group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}
+              </button>
+            ))}
+          </div>
+        )}
+        {weekRangeMenuOpen && (
+          <div className="filter-rail week-filter-rail" role="group" aria-label="نطاق الأيام">
+            {([5, 7, 14, 30] as const).map((count) => (
+              <button type="button" key={count} className={weekRangeDays === count ? "selected" : ""} onClick={() => { setWeekRangeDays(count); setWeekRangeMenuOpen(false); }}>
+                {weekRangeLabel(count)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="week-review">
+          {weekReviewDays.length === 0 && (
+            <p className="week-review-empty">لا توجد أيام تمرين في هذا النطاق</p>
+          )}
+          {weekReviewDays.map(({ key, day, exercises, volume }) => {
+            const today = isToday(day.toISOString());
+            return (
+              <div className={`week-row${today ? " is-today" : ""}`} key={key}>
+                <div className="week-row-day">
+                  <strong>{today ? "اليوم" : ARABIC_WEEK_DAYS[day.getDay()]}</strong>
+                  <span>{day.getDate()} {LATIN_MONTHS[day.getMonth()]}</span>
+                  {volume > 0 && <i className="week-row-dot" />}
+                </div>
+                <div className="week-row-body">
+                  {exercises.length ? (
+                    <div className="week-exercise-strip">
+                      {exercises.map((exercise) => (
+                        <div className="week-exercise-item" key={exercise.id}>
+                          <span className="week-exercise-icon" style={{ color: `var(${muscleGroupColorVar(exercise.muscle)})` }}>
+                            <Dumbbell size={16} />
+                          </span>
+                          <small>{exercise.name}</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <span className="week-rest">راحة</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <button type="button" className="expand-history-toggle" onClick={() => setFullHistoryExpanded((open) => !open)} aria-expanded={fullHistoryExpanded}>
+          <span>{fullHistoryExpanded ? "إخفاء السجل الكامل" : "عرض السجل الكامل"}</span>
+          {fullHistoryExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+        </button>
+      </section>
+
+      {fullHistoryExpanded && (
+        <>
+          <section className="month-calendar" aria-label="اختيار تاريخ من السجل">
+            <button
+              type="button"
+              className="calendar-trigger"
+              onClick={() => setCalendarExpanded((current) => !current)}
+              aria-expanded={calendarExpanded}
+            >
+              <span className="calendar-trigger-icon"><Calendar size={18} /></span>
+              <span className="calendar-trigger-label">
+                <strong>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</strong>
+                <small>{selectedDaySessions.length ? countLabel(selectedDaySessions.length, "حصة واحدة", "حصص") : "لا يوجد تمرين"}</small>
+              </span>
+              <ChevronDown className="calendar-trigger-chevron" size={19} />
+            </button>
+
+            {calendarExpanded && (
+              <div className="month-calendar-body">
+                <div className="month-calendar-head">
+                  <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, -1))} aria-label="الشهر السابق"><ChevronRight size={19} /></button>
+                  <strong>{historyMonthLabel}</strong>
+                  <button type="button" onClick={() => setHistoryDateOverride(shiftMonth(selectedHistoryDate, 1))} aria-label="الشهر التالي"><ChevronLeft size={19} /></button>
+                  <button type="button" className="today-jump" onClick={() => { setHistoryDateOverride(new Date()); setExpandedSessionId(null); setCalendarExpanded(false); }}>اليوم</button>
+                </div>
+
+                <div className="month-weekdays" aria-hidden="true">
+                  {ARABIC_WEEK_INITIALS.map((initial, index) => <span key={ARABIC_WEEK_DAYS[index]}>{initial}</span>)}
+                </div>
+
+                <div className="month-grid" role="group" aria-label="أيام الشهر">
+                  {historyMonthCells.map((day, index) => {
+                    if (!day) return <span className="month-blank" key={`blank-${index}`} />;
+                    const key = calendarDayKey(day);
+                    const selected = key === calendarDayKey(selectedHistoryDate);
+                    const today = isToday(day.toISOString());
+                    const trained = sessionDayKeys.has(key);
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${trained ? " trained" : ""}`}
+                        onClick={() => { setHistoryDateOverride(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
+                        aria-pressed={selected}
+                        aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}`}
+                      >
+                        <b>{formatNumber(day.getDate())}</b>
+                        <i />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="month-legend">
+                  <span><i /> يوم تمرين</span>
+                  <b>{countLabel(monthSessionCount, "حصة واحدة هذا الشهر", "حصص هذا الشهر")}</b>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="day-log">
+            <div className="day-log-head">
+              <h2>{isToday(selectedHistoryDate.toISOString()) ? "اليوم" : formatDayHeading(selectedHistoryDate.toISOString())}</h2>
+              {selectedDaySessions.length > 0 && <span>{countLabel(selectedDaySessions.length, "حصة واحدة", "حصص")}</span>}
+            </div>
+
+            {selectedDaySessions.length ? selectedDaySessions.map((session) => {
+              const expanded = expandedSessionId === session.id;
+              return (
+                <article className={`log-card${expanded ? " expanded" : ""}`} key={session.id}>
+                  <button
+                    type="button"
+                    className="log-card-head"
+                    onClick={() => setExpandedSessionId(expanded ? null : session.id)}
+                    aria-expanded={expanded}
+                  >
+                    <span className="log-symbol"><Dumbbell size={19} /></span>
+                    <span className="log-title">
+                      <strong>{session.name}</strong>
+                      <small>{formatTime(session.completedAt)} · {countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</small>
+                    </span>
+                    <ChevronDown className="log-chevron" size={19} />
+                  </button>
+
+                  {expanded && (
+                    <div className="log-body">
+                      {session.exercises.map((exercise) => {
+                        const meta = exerciseCatalog.find((item) => item.id === exercise.exerciseId);
+                        let workingIndex = 0;
+                        return (
+                          <div className="log-exercise" key={exercise.exerciseId}>
+                            <div className="log-exercise-head">
+                              <strong>{meta?.name ?? "تمرين محذوف"}</strong>
+                              <small>{countLabel(exercise.sets.length, "مجموعة واحدة", "مجموعات")}</small>
+                            </div>
+                            <div className="log-sets">
+                              {exercise.sets.map((set) => {
+                                if (set.type === "working") workingIndex += 1;
+                                return (
+                                  <span className={`log-set${set.type === "warmup" ? " warmup" : ""}`} key={set.id}>
+                                    <i>{set.type === "warmup" ? "إحماء" : formatNumber(workingIndex)}</i>
+                                    <b dir="ltr">{formatNumber(set.weightKg)} kg × {formatNumber(set.reps)}</b>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            {exercise.notes && <p className="log-note">{exercise.notes}</p>}
+                          </div>
+                        );
+                      })}
+                      <div className="log-card-footer">
+                        <span>حجم العمل <b dir="ltr">{formatNumber(workoutVolume(session.exercises))} kg</b></span>
+                        <button type="button" onClick={() => deleteSession(session.id)}><Trash2 size={15} /> حذف الحصة</button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            }) : (
+              <div className="day-log-empty">
+                <Dumbbell size={22} />
+                <strong>لا يوجد تمرين في هذا اليوم</strong>
+                <span>الأيام المعلّمة بنقطة فيها حصص مسجلة.</span>
+              </div>
+            )}
+          </section>
+
+          {personalRecords.length > 0 && (
+            <section className="section-block">
+              <div className="section-title"><div><p className="eyebrow">أفضل ما رفعت</p><h2>أرقامك القياسية</h2></div></div>
+              <div className="record-list">
+                {personalRecords.map((record, index) => (
+                  <article className="record-row" key={record.exerciseId}>
+                    <span className={`record-rank${index === 0 ? " top" : ""}`}>{index === 0 ? <Trophy size={15} /> : formatNumber(index + 1)}</span>
+                    <div><strong>{record.name}</strong><small>{formatDate(record.date)}</small></div>
+                    <b dir="ltr">{formatNumber(record.weightKg)} kg × {formatNumber(record.reps)}</b>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
     </>
   );
 
-  const content = tab === "today" ? todayContent : tab === "workout" ? workoutContent : tab === "nutrition" ? nutritionContent : progressContent;
+  const content = tab === "workout" ? workoutContent : tab === "nutrition" ? nutritionContent : progressContent;
 
   return (
     <main className="app-shell">
@@ -1972,7 +2127,7 @@ export default function Home() {
       </nav>
       {toast && (
         <div className="toast" role="status">
-          <Check size={17} /> {toast}
+          {toast.tone === "record" ? <Trophy size={17} /> : <Check size={17} />} {toast.text}
           {toastUndo && (
             <button
               type="button"
@@ -2043,11 +2198,11 @@ export default function Home() {
       {sheet === "template" && <Sheet title="إنشاء جدولك" onClose={() => setSheet(null)}><form className="form-stack sheet-form" onSubmit={saveTemplate}><label><span>اسم الجدول <b>*</b></span><input value={templateName} onChange={(event) => setTemplateName(event.target.value)} placeholder="اكتب الاسم الذي يناسبك" autoFocus /></label><fieldset className="exercise-picker"><legend>اختر التمارين <em>اختياري</em></legend><p className="form-hint">اختر من التمارين الجاهزة أو تمارينك التي أضفتها. يمكنك تعديل القالب لاحقًا.</p>{exerciseCatalog.map((exercise) => <label key={exercise.id} className="check-row"><input type="checkbox" checked={templateExercises.includes(exercise.id)} onChange={(event) => setTemplateExercises(event.target.checked ? [...templateExercises, exercise.id] : templateExercises.filter((id) => id !== exercise.id))} /><span>{exercise.name}</span><small>{exercise.primaryMuscle}</small></label>)}</fieldset><AppButton type="submit" disabled={!templateName.trim()} icon={<Check size={18} />}>حفظ الجدول</AppButton></form></Sheet>}
 
       {sheet === "exercise" && (
-        <Sheet title={`تسجيل تمرين · ${formatDate(selectedWorkoutDate.toISOString())}`} onClose={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); }}>
+        <Sheet title={`تسجيل تمرين · ${ARABIC_WEEK_DAYS[selectedWorkoutDate.getDay()]} ${selectedWorkoutDate.getDate()} ${LATIN_MONTHS[selectedWorkoutDate.getMonth()]}`} onClose={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); }}>
           <form className="exercise-session-form" onSubmit={(event) => { event.preventDefault(); saveExerciseDraft(true); }}>
             <div className="session-tool-row">
               <label className="library-search">
-                <Search size={17} />
+                <Search size={18} />
                 <input value={exerciseSearch} onChange={(event) => { setExerciseSearch(event.target.value); if (exerciseToAdd) resetExerciseLogger(); }} placeholder="ابحث في معداتك..." aria-label="ابحث في معداتك" autoFocus={!exerciseDraftMeta} />
               </label>
               <button type="button" className="library-link compact-link" onClick={() => { resetExerciseLogger(); setExerciseSearch(""); setSheet(null); setWorkoutView("equipment"); }}><Dumbbell size={17} /><span>المكتبة</span></button>
@@ -2055,31 +2210,72 @@ export default function Home() {
 
             {!exerciseDraftMeta ? (
               <>
-                <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية" dir="ltr">{(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>{group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}</button>)}</div>
-                <div className="exercise-choice-heading"><span>{selectedMuscleGroup === "All" ? "كل التمارين" : `تمارين ${MUSCLE_GROUP_LABELS[selectedMuscleGroup]}`}</span><small>{formatNumber(exercisesInSelectedGroup.length)} تمارين</small></div>
-                {exercisesInSelectedGroup.length === 0 ? <div className="library-empty"><Search size={20} /><span>لا توجد تمارين مطابقة</span></div> : (
-                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">{exercisesInSelectedGroup.map((exercise) => { const alreadyAdded = data.activeWorkout?.exercises.some((item) => item.exerciseId === exercise.id) ?? false; const equipment = data.equipment.find((item) => item.id === exercise.equipmentId); const stats = exerciseStatsById.get(exercise.id); const lastGap = stats ? daysSince(stats.lastDate) : null; return <button type="button" role="option" aria-selected={false} disabled={alreadyAdded} className={alreadyAdded ? "added" : ""} key={exercise.id} onClick={() => selectExerciseForLogging(exercise.id)}><span className="picker-thumb">{equipment?.photos?.length ? <img src={equipment.photos[0]} alt="" /> : <Dumbbell size={18} />}</span><span><strong>{exercise.name}</strong><small>{muscleGroupLabel(exercise.primaryMuscle)} · {exercise.repMin}–{exercise.repMax} عدة</small>{stats ? <span className="picker-stats"><span>{countLabel(stats.sessions, "جلسة واحدة", "جلسات")}</span><span>{countLabel(stats.reps, "عدة واحدة", "عدات")}</span><span className="picker-last" dir="ltr">{formatNumber(stats.lastWeightKg)} kg × {formatNumber(stats.lastReps)}</span>{lastGap !== null && <span className="picker-when">{daysAgoLabel(lastGap)}</span>}</span> : <span className="picker-stats empty">لم تتمرن عليه بعد</span>}</span>{alreadyAdded ? <Check size={17} /> : <ChevronLeft size={17} />}</button>; })}</div>
+                <div className="filter-rail exercise-filter" role="group" aria-label="المجموعات العضلية">
+                  {(["All", ...MUSCLE_GROUPS] as const).map((group) => (
+                    <button type="button" key={group} className={selectedMuscleGroup === group ? "selected" : ""} onClick={() => setSelectedMuscleGroup(group)} aria-pressed={selectedMuscleGroup === group}>
+                      {group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}
+                    </button>
+                  ))}
+                </div>
+                {exercisesInSelectedGroup.length === 0 ? (
+                  <div className="library-empty"><Search size={20} /><span>لا توجد تمارين مطابقة</span></div>
+                ) : (
+                  <div className="exercise-picker-list" role="listbox" aria-label="تمارينك">
+                    {exercisesInSelectedGroup.map((exercise) => {
+                      const stats = exerciseStatsById.get(exercise.id);
+                      return (
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          key={exercise.id}
+                          onClick={() => selectExerciseForLogging(exercise.id)}
+                        >
+                          <strong>{exercise.name}</strong>
+                          {stats && <span className="picker-last" dir="ltr">{formatNumber(stats.lastWeightKg)} kg × {formatNumber(stats.lastReps)}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </>
             ) : (
               <div className="exercise-logger">
-                <div className="selected-exercise-strip">
-                  <span className="selected-equipment-thumb">{exerciseDraftEquipment?.photos?.length ? <img src={exerciseDraftEquipment.photos[0]} alt="" /> : <Dumbbell size={19} />}</span>
-                  <div><strong>{exerciseDraftMeta.name}</strong><small>{muscleGroupLabel(exerciseDraftMeta.primaryMuscle)}</small></div>
-                  <button type="button" onClick={resetExerciseLogger} aria-label="إلغاء اختيار التمرين"><X size={17} /></button>
-                </div>
-
-                <div className="exercise-insights">
-                  <article><span>أقوى مستوى</span>{exercisePersonalBest ? <><b>{formatNumber(exercisePersonalBest.reps)} عدة</b><strong dir="ltr">{formatNumber(exercisePersonalBest.weightKg)} kg</strong></> : <small>لا يوجد سجل</small>}</article>
-                  <article><span>آخر مرة</span>{daysSinceLastTrained !== null ? <b>{daysAgoLabel(daysSinceLastTrained)}</b> : <small>لا يوجد سجل</small>}<History size={18} /></article>
+                <div className="selected-exercise-row">
+                  <div className="selected-exercise-strip">
+                    <strong>{exerciseDraftMeta.name}</strong>
+                    <button type="button" onClick={resetExerciseLogger} aria-label="إلغاء اختيار التمرين"><X size={17} /></button>
+                  </div>
+                  <div className="exercise-best">
+                    <span>أقوى مستوى</span>
+                    {exercisePersonalBest
+                      ? <b dir="ltr">{formatNumber(exercisePersonalBest.reps)} × {formatNumber(exercisePersonalBest.weightKg)} kg</b>
+                      : <small>لا يوجد سجل</small>}
+                  </div>
                 </div>
 
                 <section className="exercise-history-card" aria-label="آخر أداء للتمرين">
-                  <div className="history-title"><span><History size={16} /> آخر التمارين</span><small>{exerciseHistory.length ? countLabel(exerciseHistory.length, "حصة واحدة", "حصص") : "أول مرة"}</small></div>
+                  <div className="history-title">
+                    <span><History size={17} /> آخر التمارين</span>
+                    <small>{daysSinceLastTrained !== null ? daysAgoLabel(daysSinceLastTrained) : "أول مرة"}</small>
+                  </div>
                   {exerciseHistory.length ? (
                     <div className="history-table">
                       <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
-                      {exerciseHistory.map((entry) => <div className="history-row" key={entry.id}><span>{formatDate(entry.date)}</span><b>{formatNumber(entry.setCount)}</b><b dir="ltr">{entry.repLabel}</b><b dir="ltr">{formatNumber(entry.maxWeight)} kg</b></div>)}
+                      {(() => {
+                        const bestWeight = Math.max(...exerciseHistory.map((entry) => entry.maxWeight));
+                        return exerciseHistory.map((entry) => (
+                          <div className={`history-row${entry.maxWeight === bestWeight ? " is-best" : ""}`} key={entry.id}>
+                            <span className="history-date">
+                              <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]}</strong>
+                              <small>{formatDate(entry.date)}</small>
+                            </span>
+                            <b>{formatNumber(entry.setCount)}</b>
+                            <b dir="ltr">{entry.repLabel}</b>
+                            <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   ) : <p className="history-empty">سجّل أول أداء لك، وسيظهر هنا في المرة القادمة.</p>}
                 </section>
@@ -2089,15 +2285,47 @@ export default function Home() {
                   {exerciseDraftSets.map((draft, index) => (
                     <div className="draft-set-row" key={draft.id}>
                       <div className="draft-index"><b>{formatNumber(index + 1)}</b>{exerciseDraftSets.length > 1 && <button type="button" onClick={() => removeExerciseDraftSet(draft.id)} aria-label={`حذف الجلسة ${index + 1}`}><X size={14} /></button>}</div>
-                      <div className="stepper-control" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", -1)} aria-label="إنقاص التكرارات"><Minus size={15} /></button><input value={draft.reps} onChange={(event) => updateExerciseDraftSet(draft.id, "reps", event.target.value)} type="text" inputMode="numeric" aria-label={`تكرارات الجلسة ${index + 1}`} /><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", 1)} aria-label="زيادة التكرارات"><Plus size={15} /></button></div>
-                      <div className="stepper-control weight-stepper" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={15} /></button><input value={draft.weightKg} onChange={(event) => updateExerciseDraftSet(draft.id, "weightKg", event.target.value)} type="text" inputMode="decimal" aria-label={`وزن الجلسة ${index + 1}`} /><span>kg</span><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={15} /></button></div>
+                      <div className="stepper-control" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", -1)} aria-label="إنقاص التكرارات"><Minus size={16} /></button><input value={draft.reps} onChange={(event) => updateExerciseDraftSet(draft.id, "reps", event.target.value)} type="text" inputMode="numeric" aria-label={`تكرارات الجلسة ${index + 1}`} /><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "reps", 1)} aria-label="زيادة التكرارات"><Plus size={16} /></button></div>
+                      <div className="stepper-control weight-stepper" dir="ltr"><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={16} /></button><input value={draft.weightKg} onChange={(event) => updateExerciseDraftSet(draft.id, "weightKg", event.target.value)} type="text" inputMode="decimal" aria-label={`وزن الجلسة ${index + 1}`} /><span>kg</span><button type="button" onClick={() => stepExerciseDraftSet(draft.id, "weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={16} /></button></div>
                     </div>
                   ))}
-                  <button type="button" className="add-draft-set" onClick={addExerciseDraftSet}><Plus size={16} /> إضافة جلسة</button>
+                  <button type="button" className="add-draft-set" onClick={addExerciseDraftSet}><Plus size={17} /> إضافة جلسة</button>
                 </section>
 
-                <button type="button" className="notes-toggle" onClick={() => setShowExerciseNotes((visible) => !visible)}><Plus size={16} /> ملاحظات</button>
-                {showExerciseNotes && <textarea className="exercise-notes" value={exerciseNotes} onChange={(event) => setExerciseNotes(event.target.value)} placeholder="اكتب ملاحظة عن الأداء أو إعداد الجهاز" rows={3} autoFocus />}
+                <div className="logger-extras-row">
+                  <button type="button" className="notes-toggle" onClick={() => setShowExerciseNotes((visible) => !visible)}>
+                    <Plus size={16} /> خيارات وملاحظات
+                  </button>
+                  {draftAlreadyLogged && (
+                    <button
+                      type="button"
+                      className="remove-from-session"
+                      onClick={() => { removeExerciseFromWorkout(exerciseToAdd); resetExerciseLogger(); setSheet(null); }}
+                    >
+                      <Trash2 size={15} /> إزالة من الحصة
+                    </button>
+                  )}
+                </div>
+                {showExerciseNotes && (
+                  <div className="logger-extras">
+                    <fieldset className="set-choice-block">
+                      <legend>نوع الجلسة</legend>
+                      <div className="set-type-segment" role="group" aria-label="نوع الجلسة">
+                        <button type="button" className={draftSetType === "working" ? "selected" : ""} onClick={() => setDraftSetType("working")}>مجموعة عمل</button>
+                        <button type="button" className={draftSetType === "warmup" ? "selected" : ""} onClick={() => setDraftSetType("warmup")}>إحماء</button>
+                      </div>
+                    </fieldset>
+                    <fieldset className="set-choice-block rir-choice">
+                      <legend><span>RIR</span><small>التكرارات المتبقية</small></legend>
+                      <div className="rir-chip-row" role="group" aria-label="التكرارات المتبقية">
+                        {[0, 1, 2, 3, 4, 5].map((rir) => (
+                          <button type="button" key={rir} className={draftRir === String(rir) ? "selected" : ""} onClick={() => setDraftRir(String(rir))} aria-pressed={draftRir === String(rir)}>{rir}</button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <textarea className="exercise-notes" value={exerciseNotes} onChange={(event) => setExerciseNotes(event.target.value)} placeholder="اكتب ملاحظة عن الأداء أو إعداد الجهاز" rows={3} />
+                  </div>
+                )}
 
                 <div className="exercise-save-actions">
                   <button type="submit" className="session-save">حفظ التمرين</button>
@@ -2105,55 +2333,6 @@ export default function Home() {
                 </div>
               </div>
             )}
-          </form>
-        </Sheet>
-      )}
-
-      {sheet === "set" && (
-        <Sheet title="إضافة جلسة" onClose={() => setSheet(null)}>
-          <form className="set-session-sheet" onSubmit={saveSet}>
-            <div className="set-exercise-banner">
-              <span className="set-exercise-icon"><Dumbbell size={19} /></span>
-              <div><small>التمرين الحالي</small><strong>{activeExerciseMeta?.name}</strong></div>
-              <b>{activeExerciseMeta ? muscleGroupLabel(activeExerciseMeta.primaryMuscle) : ""}</b>
-            </div>
-
-            <div className="set-metrics-grid">
-              <label className="set-metric-card">
-                <span>الوزن <small>kg</small></span>
-                <div className="set-sheet-stepper" dir="ltr">
-                  <button type="button" onClick={() => stepSetFormValue("weightKg", -0.5)} aria-label="إنقاص الوزن"><Minus size={17} /></button>
-                  <input value={setForm.weightKg} onChange={(event) => { setSetError(""); setSetForm({ ...setForm, weightKg: event.target.value }); }} type="text" inputMode="decimal" placeholder="0" autoFocus aria-label="الوزن بالكيلوغرام" />
-                  <button type="button" onClick={() => stepSetFormValue("weightKg", 0.5)} aria-label="زيادة الوزن"><Plus size={17} /></button>
-                </div>
-              </label>
-              <label className="set-metric-card">
-                <span>التكرارات</span>
-                <div className="set-sheet-stepper" dir="ltr">
-                  <button type="button" onClick={() => stepSetFormValue("reps", -1)} aria-label="إنقاص التكرارات"><Minus size={17} /></button>
-                  <input value={setForm.reps} onChange={(event) => { setSetError(""); setSetForm({ ...setForm, reps: event.target.value }); }} type="text" inputMode="numeric" placeholder="8" aria-label="عدد التكرارات" />
-                  <button type="button" onClick={() => stepSetFormValue("reps", 1)} aria-label="زيادة التكرارات"><Plus size={17} /></button>
-                </div>
-              </label>
-            </div>
-
-            <fieldset className="set-choice-block">
-              <legend>نوع الجلسة</legend>
-              <div className="set-type-segment" role="group" aria-label="نوع الجلسة">
-                <button type="button" className={setForm.type === "working" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "working" })}>مجموعة عمل</button>
-                <button type="button" className={setForm.type === "warmup" ? "selected" : ""} onClick={() => setSetForm({ ...setForm, type: "warmup" })}>إحماء</button>
-              </div>
-            </fieldset>
-
-            <fieldset className="set-choice-block rir-choice">
-              <legend><span>RIR</span><small>التكرارات المتبقية</small></legend>
-              <div className="rir-chip-row" role="group" aria-label="التكرارات المتبقية">
-                {[0, 1, 2, 3, 4, 5].map((rir) => <button type="button" key={rir} className={setForm.rir === String(rir) ? "selected" : ""} onClick={() => setSetForm({ ...setForm, rir: String(rir) })} aria-pressed={setForm.rir === String(rir)}>{rir}</button>)}
-              </div>
-            </fieldset>
-
-            {setError && <p className="form-error" role="alert">{setError}</p>}
-            <button type="submit" className="set-save-button"><Check size={19} /> حفظ الجلسة</button>
           </form>
         </Sheet>
       )}
