@@ -227,32 +227,25 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .session-stats-meta .delta.down { color: var(--muted); }
 
 /* Action row — white primary CTA beside the dark session timer. */
-.session-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-bottom: 22px; }
-.session-log-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border-radius: var(--r-md); color: var(--primary-ink); background: var(--primary-bg); font-size: 15px; font-weight: 700; box-shadow: var(--shadow-primary); transition: filter .16s ease, transform .16s ease; }
+.session-log-button { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; min-height: 56px; margin-bottom: 22px; border-radius: var(--r-md); color: var(--primary-ink); background: var(--primary-bg); font-size: 15px; font-weight: 700; box-shadow: var(--shadow-primary); transition: filter .16s ease, transform .16s ease; }
 .session-log-button:hover { filter: brightness(.94); }
 .session-log-button:active { transform: scale(.98); }
-.session-timer { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 56px; border-radius: var(--r-md); color: var(--ink); background: var(--surface-soft); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; transition: background .16s ease; }
-.session-timer:hover { background: #2b2b2b; }
-.session-timer:active { transform: scale(.98); }
-.session-timer .timer-value { direction: ltr; letter-spacing: .02em; }
-.session-timer.running { color: var(--accent); }
-.session-timer.running svg { color: var(--accent); }
 
 /* Exercise summary card — one per exercise logged on the selected day. */
 .exercise-summary-list { display: grid; gap: 11px; }
-.exercise-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; width: 100%; padding: 15px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; transition: border-color .16s ease, background .16s ease; }
+.exercise-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; width: 100%; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; transition: border-color .16s ease, background .16s ease; }
 .exercise-summary:hover { border-color: var(--line-strong); background: var(--surface-raised); }
 .exercise-summary:active { transform: scale(.99); }
-.exercise-summary-icon { display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 48px; height: 48px; border-radius: var(--r-md); color: var(--muted); background: var(--surface-soft); }
+.exercise-summary-icon { display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-md); color: var(--muted); background: var(--surface-soft); }
 .exercise-summary-icon img { width: 100%; height: 100%; object-fit: cover; }
-.exercise-summary-title { display: grid; gap: 3px; min-width: 0; }
-.exercise-summary-title strong { overflow: hidden; font-size: 16px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.exercise-summary-title small { color: var(--accent); font-size: 12px; font-weight: 500; }
-.exercise-summary-figures { display: flex; gap: 11px; flex: 0 0 auto; }
+.exercise-summary-title { display: grid; gap: 5px; min-width: 0; }
+.exercise-summary-title strong { overflow: hidden; font-size: 19px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.exercise-summary-title small { color: var(--accent); font-size: 14px; font-weight: 550; }
+.exercise-summary-figures { display: flex; gap: 18px; flex: 0 0 auto; }
 .exercise-summary-figures > div { display: grid; justify-items: center; gap: 3px; }
-.exercise-summary-figures span { color: var(--muted); font-size: 11px; }
-.exercise-summary-figures b { color: var(--ink); font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.exercise-summary-figures b small { color: var(--muted); font-size: 10px; font-weight: 400; }
+.exercise-summary-figures span { color: var(--muted); font-size: 13px; }
+.exercise-summary-figures b { color: var(--ink); font-size: 18px; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exercise-summary-figures b small { color: var(--muted); font-size: 11px; font-weight: 400; }
 
 /* ============================================================
    Workout tab
@@ -494,7 +487,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .week-exercise-strip { display: flex; gap: 14px; overflow-x: auto; padding: 2px 2px 2px 0; scrollbar-width: none; }
 .week-exercise-strip::-webkit-scrollbar { display: none; }
 .week-exercise-item { display: grid; justify-items: center; gap: 6px; flex: 0 0 auto; width: 58px; text-align: center; }
-.week-exercise-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, currentColor 18%, var(--surface-soft)); }
+.week-exercise-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 0; background: transparent; }
+.week-exercise-icon img { width: 48px; height: 48px; padding: 0; object-fit: contain; display: block; }
 .week-exercise-item small { overflow: hidden; display: -webkit-box; width: 100%; color: var(--muted); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .week-rest { display: inline-block; color: var(--subtle); font-size: 13px; }
 
@@ -1010,12 +1004,109 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .exercise-save-actions { position: sticky; bottom: 0; padding-top: 4px; background: linear-gradient(transparent, var(--surface) 28%); }
 }
 
+/* Keep the workout and nutrition heading compact: the title and its hint share
+   one row on wider screens, leaving the day selector closer to the content. */
+@media (min-width: 760px) {
+  .view-workout .page-header > div:first-child,
+  .view-nutrition .page-header > div:first-child {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    min-width: 0;
+  }
+  .view-workout .page-header > div:first-child p,
+  .view-nutrition .page-header > div:first-child p {
+    margin: 0;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .view-workout .page-header,
+  .view-nutrition .page-header { padding-bottom: 12px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .macro-track { animation: none !important; }
+}
+
+/* Swipeable day rail + shared activity calendar for Workout and Nutrition. */
+.day-selector { position: relative; min-width: 0; }
+.day-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: inline proximity;
+  scrollbar-width: none;
+  margin-bottom: 26px;
+  padding: 2px 2px 8px;
+  cursor: grab;
+}
+.day-strip::-webkit-scrollbar { display: none; }
+.day-strip:active { cursor: grabbing; }
+.day-card {
+  flex: 0 0 clamp(86px, 16vw, 112px);
+  width: auto;
+  height: 112px;
+  scroll-snap-align: center;
+}
+.day-calendar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 12;
+  width: min(138px, 24vw);
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  overflow: visible;
+}
+.day-calendar-trigger { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 49px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); color: var(--ink-dim); background: var(--surface); text-align: start; }
+.day-calendar-trigger:hover { background: var(--surface-raised); }
+.day-calendar-trigger-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-sm); color: var(--accent); background: var(--accent-wash); }
+.day-calendar-trigger > span:nth-child(2) { display: grid; gap: 1px; min-width: 0; }
+.day-calendar-trigger strong { color: var(--ink-dim); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.day-calendar-trigger small { display: none; color: var(--muted); font-size: 10px; }
+.day-calendar-trigger > svg { color: var(--subtle); }
+.day-calendar-body {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(340px, calc(100vw - 32px));
+  padding: 0 11px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 34%);
+}
+.day-calendar-head { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px auto; align-items: center; gap: 7px; margin: 11px 0 10px; }
+.day-calendar-head > button:not(.today-jump) { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--ink-dim); background: var(--surface-soft); }
+.day-calendar-head > button:not(.today-jump):active { transform: scale(.94); }
+.day-calendar-head > strong { overflow: hidden; color: var(--ink); font-size: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.day-calendar-head .today-jump { min-height: 29px; padding-inline: 10px; font-size: 11px; }
+.day-calendar .month-weekdays { margin-bottom: 5px; }
+.day-calendar .month-weekdays span { font-size: 10px; }
+.day-calendar .month-grid { gap: 3px; }
+.day-calendar .month-day { border-radius: 9px; }
+.day-calendar .month-day b { font-size: 12px; }
+.day-calendar .month-day i { width: 4px; height: 4px; }
+.day-calendar .month-legend { padding-top: 9px; font-size: 10px; }
+
+@media (max-width: 500px) {
+  .day-strip { gap: 6px; padding-bottom: 6px; }
+  .day-card { flex-basis: 76px; height: 96px; padding: 9px 3px 18px; }
+  .day-card .day-weekday { font-size: 10px; }
+  .day-card .day-number { font-size: 23px; }
+  .day-calendar { width: 112px; }
+  .day-calendar-trigger { min-height: 40px; gap: 6px; padding: 6px 8px; }
+  .day-calendar-trigger-icon { width: 26px; height: 26px; }
+  .day-calendar-trigger strong { font-size: 11px; }
+  .day-calendar-trigger small { display: none; }
+  .day-calendar-body { top: calc(100% + 6px); width: min(320px, calc(100vw - 30px)); }
 }
 
 /* ============================================================
@@ -1072,4 +1163,45 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .view-workout.view-templates:not(.workout-active) > .workout-day-browser,
   .view-workout.view-templates:not(.workout-active) > .section-block { margin: 0; }
   .view-workout.workout-active .workout-day-browser { max-width: 920px; margin-inline: auto; }
+}
+
+/* Dense mobile layout: keep four logged items within a comfortable viewport. */
+@media (max-width: 500px) {
+  .session-stats { margin-bottom: 10px; }
+  .session-stats-figures { padding: 12px 5px; }
+  .session-stats-figures > div { gap: 4px; padding: 0 4px; }
+  .session-stats-figures span { font-size: 11px; }
+  .session-stats-figures b { font-size: 22px; }
+  .session-stats-figures b small { font-size: 10px; }
+  .session-stats-meta { gap: 11px; padding: 8px 10px; font-size: 11px; }
+  .session-log-button { min-height: 48px; margin-bottom: 14px; font-size: 14px; }
+
+  .exercise-summary-list { gap: 7px; }
+  .exercise-summary { gap: 12px; padding: 11px 13px; border-radius: var(--r-md); }
+  .exercise-summary-icon { width: 46px; height: 46px; border-radius: 12px; }
+  .exercise-summary-title { gap: 3px; }
+  .exercise-summary-title strong { font-size: 16px; }
+  .exercise-summary-title small { font-size: 12px; }
+  .exercise-summary-figures { gap: 30px; }
+  .exercise-summary-figures > div { gap: 2px; }
+  .exercise-summary-figures span { font-size: 10px; }
+  .exercise-summary-figures b { font-size: 15px; }
+  .exercise-summary-figures b small { font-size: 9px; }
+
+  .nutrient-card { padding: 13px; }
+  .calorie-card { margin-bottom: 8px; }
+  .nutrient-name { font-size: 14px; }
+  .nutrient-name .nutrient-emoji { font-size: 16px; }
+  .nutrient-track { height: 8px; margin: 10px 0 8px; }
+  .nutrient-value { font-size: 13px; }
+  .nutrient-value b { font-size: 19px; }
+  .macro-grid { gap: 5px; }
+  .macro-grid .nutrient-card { padding: 10px 8px; }
+  .macro-grid .nutrient-name { font-size: 12px; }
+  .macro-grid .nutrient-track { height: 6px; margin: 9px 0 7px; }
+  .macro-grid .nutrient-value { font-size: 11px; }
+  .macro-grid .nutrient-value b { font-size: 15px; }
+  .meal-list { gap: 1px; }
+  .meal-card { min-height: 60px; padding: 8px 10px; }
+  .meal-card strong { font-size: 15px; }
 }

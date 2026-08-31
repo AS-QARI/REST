@@ -23,9 +23,7 @@ import {
   LockKeyhole,
   LogOut,
   Minus,
-  Pause,
   Pencil,
-  Play,
   Plus,
   Repeat,
   Search,
@@ -39,7 +37,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner } from "./auth";
@@ -308,6 +306,19 @@ function muscleGroupLabel(value: string) {
   return group ? MUSCLE_GROUP_LABELS[group] : value;
 }
 
+const MUSCLE_GROUP_IMAGE: Record<MuscleGroup, string> = {
+  Chest: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/muscles/chest.svg`,
+  Back: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/muscles/back.svg`,
+  Shoulders: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/muscles/shoulders.svg`,
+  Arms: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/muscles/arms.svg`,
+  Legs: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/muscles/legs.svg`,
+};
+
+function muscleGroupImage(value: string) {
+  const group = muscleGroupFor(value);
+  return group ? MUSCLE_GROUP_IMAGE[group] : null;
+}
+
 function readNumericInput(value: string) {
   const normalized = value
     .trim()
@@ -348,12 +359,6 @@ function daysAround(value: Date, radius = 2) {
 }
 
 const LATIN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatClock(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
 function shiftMonth(value: Date, months: number) {
   const next = new Date(value.getFullYear(), value.getMonth() + months, 1, 12);
@@ -592,21 +597,49 @@ function EmptyState({
   );
 }
 
-// Shared by the Workout and Nutrition tabs: week arrows, a "today" reset, and a
-// five-day strip that keeps the selected day centred.
+// Shared by the Workout and Nutrition tabs: a compact, swipeable day rail and
+// an optional month calendar that marks activity days.
 function DaySelector({
   selectedDay,
   onSelect,
   countFor,
   label,
+  activityKeys,
+  activityLabel,
 }: {
   selectedDay: Date;
   onSelect: (day: Date) => void;
   countFor: (day: Date) => number;
   label: string;
+  activityKeys: ReadonlySet<string>;
+  activityLabel: string;
 }) {
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1, 12));
+  const selectedRef = useRef<HTMLButtonElement>(null);
+  const monthCells = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const leadingBlanks = new Date(year, month, 1, 12).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return [
+      ...Array.from({ length: leadingBlanks }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => new Date(year, month, index + 1, 12)),
+    ];
+  }, [calendarMonth]);
+  const monthLabel = useMemo(() => new Intl.DateTimeFormat(ARABIC_WITH_LATIN_NUMBERS, {
+    month: "long",
+    year: "numeric",
+    calendar: "gregory",
+    numberingSystem: "latn",
+  }).format(calendarMonth), [calendarMonth]);
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [selectedDay]);
+
   return (
-    <>
+    <section className="day-selector" aria-label={label}>
       <div className="day-nav">
         <button type="button" onClick={() => onSelect(shiftDate(selectedDay, -7))} aria-label="الأسبوع السابق">
           <ChevronRight size={20} />
@@ -616,8 +649,8 @@ function DaySelector({
           <ChevronLeft size={20} />
         </button>
       </div>
-      <div className="day-strip" role="group" aria-label={label}>
-        {daysAround(selectedDay).map((day) => {
+      <div className="day-strip" role="group" aria-label={`${label} — اسحب يمينًا أو يسارًا`}>
+        {daysAround(selectedDay, 5).map((day) => {
           const key = calendarDayKey(day);
           const selected = key === calendarDayKey(selectedDay);
           const today = isToday(day.toISOString());
@@ -626,6 +659,7 @@ function DaySelector({
             <button
               type="button"
               key={key}
+              ref={selected ? selectedRef : undefined}
               className={`day-card${selected ? " selected" : ""}${today ? " today" : ""}`}
               onClick={() => onSelect(day)}
               aria-pressed={selected}
@@ -639,7 +673,54 @@ function DaySelector({
           );
         })}
       </div>
-    </>
+      <div className="day-calendar">
+        <button
+          type="button"
+          className="day-calendar-trigger"
+          onClick={() => setCalendarOpen((open) => !open)}
+          aria-expanded={calendarOpen}
+        >
+          <span className="day-calendar-trigger-icon"><Calendar size={16} /></span>
+          <span><strong>التقويم</strong><small>{activityLabel} المعلّمة</small></span>
+          {calendarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {calendarOpen && (
+          <div className="day-calendar-body">
+            <div className="day-calendar-head">
+              <button type="button" onClick={() => setCalendarMonth((month) => shiftMonth(month, -1))} aria-label="الشهر السابق"><ChevronRight size={17} /></button>
+              <strong>{monthLabel}</strong>
+              <button type="button" onClick={() => setCalendarMonth((month) => shiftMonth(month, 1))} aria-label="الشهر التالي"><ChevronLeft size={17} /></button>
+              <button type="button" className="today-jump" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1, 12)); onSelect(today); }}>اليوم</button>
+            </div>
+            <div className="month-weekdays" aria-hidden="true">
+              {ARABIC_WEEK_INITIALS.map((initial, index) => <span key={`${activityLabel}-${ARABIC_WEEK_DAYS[index]}`}>{initial}</span>)}
+            </div>
+            <div className="month-grid" role="group" aria-label={monthLabel}>
+              {monthCells.map((day, index) => {
+                if (!day) return <span className="month-blank" key={`blank-${index}`} />;
+                const key = calendarDayKey(day);
+                const selected = key === calendarDayKey(selectedDay);
+                const today = isToday(day.toISOString());
+                const active = activityKeys.has(key);
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${active ? " trained" : ""}`}
+                    onClick={() => { setCalendarMonth(new Date(day.getFullYear(), day.getMonth(), 1, 12)); onSelect(day); }}
+                    aria-pressed={selected}
+                    aria-label={`${formatDayHeading(day.toISOString())}${active ? ` — ${activityLabel}` : ""}`}
+                  >
+                    <b>{formatNumber(day.getDate())}</b><i />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="month-legend"><span><i /> {activityLabel}</span><span>{activityKeys.size ? `${formatNumber(activityKeys.size)} يوم` : "لا توجد أيام بعد"}</span></div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -728,9 +809,6 @@ export default function Home() {
   const [selectedExerciseId, setSelectedExerciseId] = useState("");
   const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
   const [selectedMealDate, setSelectedMealDate] = useState(() => new Date());
-  // Session stopwatch — a view-only timer, never persisted with the workout.
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [timerRunning, setTimerRunning] = useState(false);
   const [historyDateOverride, setHistoryDateOverride] = useState<Date | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
@@ -782,12 +860,6 @@ export default function Home() {
   }, [toastKey]);
 
   useEffect(() => {
-    if (!timerRunning) return;
-    const id = window.setInterval(() => setTimerSeconds((seconds) => seconds + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [timerRunning]);
-
-  useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [tab, workoutView]);
 
@@ -812,6 +884,10 @@ export default function Home() {
       .filter((meal) => calendarDayKey(meal.createdAt) === calendarDayKey(selectedMealDate))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [data.meals, selectedMealDate],
+  );
+  const mealDayKeys = useMemo(
+    () => new Set(data.meals.map((meal) => calendarDayKey(meal.createdAt))),
+    [data.meals],
   );
   const nutrition = useMemo(() => sumMeal(selectedDayMeals), [selectedDayMeals]);
   const sortedSessions = useMemo(
@@ -848,6 +924,11 @@ export default function Home() {
     () => new Set(data.sessions.map((session) => calendarDayKey(session.completedAt))),
     [data.sessions],
   );
+  const workoutDayKeys = useMemo(() => {
+    const keys = new Set(sessionDayKeys);
+    if (data.activeWorkout?.exercises.length) keys.add(calendarDayKey(data.activeWorkout.startedAt));
+    return keys;
+  }, [data.activeWorkout, sessionDayKeys]);
   const monthSessionCount = useMemo(() => data.sessions.filter((session) => {
     const date = new Date(session.completedAt);
     return date.getFullYear() === selectedHistoryDate.getFullYear() && date.getMonth() === selectedHistoryDate.getMonth();
@@ -1257,14 +1338,16 @@ export default function Home() {
   };
 
   const selectExerciseForLogging = (exerciseId: string) => {
+    const loggedExercise = data.activeWorkout?.exercises.find((item) => item.exerciseId === exerciseId);
     const previous = latestSetFor(exerciseId);
+    const setsToEdit = loggedExercise?.sets.length ? loggedExercise.sets : undefined;
     setExerciseToAdd(exerciseId);
-    setExerciseDraftSets([{
-      id: uid(),
-      weightKg: String(previous?.weightKg ?? 0),
-      reps: String(previous?.reps ?? 8),
-    }]);
-    setExerciseNotes("");
+    setExerciseDraftSets(setsToEdit
+      ? setsToEdit.map((set) => ({ id: uid(), weightKg: String(set.weightKg), reps: String(set.reps) }))
+      : [{ id: uid(), weightKg: String(previous?.weightKg ?? 0), reps: String(previous?.reps ?? 8) }]);
+    setExerciseNotes(loggedExercise?.notes ?? "");
+    setDraftSetType(setsToEdit?.at(-1)?.type ?? "working");
+    setDraftRir(String(setsToEdit?.at(-1)?.rir ?? 2));
     setShowExerciseNotes(false);
   };
 
@@ -1317,15 +1400,17 @@ export default function Home() {
       showToast("أدخل الوزن والتكرارات أولًا");
       return;
     }
-    // Re-logging an exercise that is already in the day appends to it rather than
-    // creating a duplicate entry, so a card can be reopened to add more sets.
+    // Opening an existing card loads its current sets into the form. Saving the
+    // form therefore replaces those sets; the secondary "add another" action
+    // intentionally appends the entered sets instead.
     const alreadyLogged = data.activeWorkout.exercises.some((item) => item.exerciseId === exerciseToAdd);
+    const appendToExisting = !closeAfterSave;
     const notes = exerciseNotes.trim() || undefined;
     const nextActive: ActiveWorkout = {
       ...data.activeWorkout,
       exercises: alreadyLogged
         ? data.activeWorkout.exercises.map((item) => item.exerciseId === exerciseToAdd
-          ? { ...item, sets: [...item.sets, ...sets], notes: notes ?? item.notes }
+          ? { ...item, sets: appendToExisting ? [...item.sets, ...sets] : sets, notes: appendToExisting ? (notes ?? item.notes) : notes }
           : item)
         : [...data.activeWorkout.exercises, { exerciseId: exerciseToAdd, sets, notes }],
     };
@@ -1548,11 +1633,9 @@ export default function Home() {
             onSelect={selectWorkoutDate}
             countFor={(day) => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(day)).length}
             label="اختيار يوم التمرين"
+            activityKeys={workoutDayKeys}
+            activityLabel="أيام التمرين"
           />
-
-          <p className="day-section-label">
-            تمارين يوم {formatDayHeading(selectedWorkoutDate.toISOString())}
-          </p>
 
           <section className="session-stats" aria-label="ملخص الحصة">
             <div className="session-stats-figures">
@@ -1584,20 +1667,9 @@ export default function Home() {
             </div>
           </section>
 
-          <div className="session-actions">
-            <button type="button" className="session-log-button" onClick={() => openExerciseSheet()}>
-              <Plus size={18} /> سجّل تمرين
-            </button>
-            <button
-              type="button"
-              className={`session-timer${timerRunning ? " running" : ""}`}
-              onClick={() => setTimerRunning((running) => !running)}
-              aria-label={timerRunning ? "إيقاف المؤقّت" : "تشغيل المؤقّت"}
-            >
-              {timerRunning ? <Pause size={17} /> : <Play size={17} />}
-              <span className="timer-value">{formatClock(timerSeconds)}</span>
-            </button>
-          </div>
+          <button type="button" className="session-log-button" onClick={() => openExerciseSheet()}>
+            <Plus size={18} /> سجّل تمرين
+          </button>
 
           {data.activeWorkout && data.activeWorkout.exercises.length > 0 ? (
             <div className="exercise-summary-list">
@@ -1738,6 +1810,8 @@ export default function Home() {
         onSelect={setSelectedMealDate}
         countFor={(day) => data.meals.filter((meal) => calendarDayKey(meal.createdAt) === calendarDayKey(day)).length}
         label="اختيار يوم الوجبات"
+        activityKeys={mealDayKeys}
+        activityLabel="أيام التغذية"
       />
 
       <section className="nutrient-card calorie-card" aria-label="السعرات الحرارية">
@@ -1944,7 +2018,9 @@ export default function Home() {
                       {exercises.map((exercise) => (
                         <div className="week-exercise-item" key={exercise.id}>
                           <span className="week-exercise-icon" style={{ color: `var(${muscleGroupColorVar(exercise.muscle)})` }}>
-                            <Dumbbell size={16} />
+                            {muscleGroupImage(exercise.muscle) ? (
+                              <img src={muscleGroupImage(exercise.muscle) ?? undefined} alt="" loading="lazy" />
+                            ) : <Dumbbell size={16} />}
                           </span>
                           <small>{exercise.name}</small>
                         </div>
