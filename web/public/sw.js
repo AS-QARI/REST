@@ -1,4 +1,6 @@
-const CACHE_NAME = "rest-shell-v2";
+// Bump this whenever the app shell changes so users do not get an old theme
+// during the first render after a deployment.
+const CACHE_NAME = "rest-shell-v3";
 const APP_SHELL = [self.registration.scope];
 
 self.addEventListener("install", (event) => {
@@ -33,17 +35,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets (content-hashed): stale-while-revalidate for speed with background refresh.
+  // Prefer the network for app assets so a newly deployed CSS/JS bundle is
+  // applied immediately. The cache remains an offline fallback.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
+    fetch(request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        return response;
+      })
+      .catch(() => caches.match(request)),
   );
 });
