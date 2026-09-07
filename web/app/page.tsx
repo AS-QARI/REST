@@ -137,6 +137,7 @@ type AppData = {
   activeWorkout: ActiveWorkout | null;
   meals: Meal[];
   nutritionTarget: NutritionTarget;
+  streakOverrides?: Record<string, boolean>;
 };
 
 const EMPTY_DATA: AppData = {
@@ -147,6 +148,7 @@ const EMPTY_DATA: AppData = {
   activeWorkout: null,
   meals: [],
   nutritionTarget: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  streakOverrides: {},
 };
 
 function exerciseForEquipment(equipment: Equipment, name?: string): Exercise {
@@ -978,33 +980,56 @@ export default function Home() {
       };
     }).filter((entry) => !weekOnlyTrained || entry.exercises.length > 0);
   }, [sortedSessions, exerciseCatalog, weekRangeDays, weekMuscleFilter, weekOnlyTrained]);
-  // Current streak: walking back from today, a day counts if trained; a gap of 3+
-  // consecutive untrained days ends the streak, shorter gaps are forgiven.
+  const streakOverrideMap = useMemo(() => data.streakOverrides ?? {}, [data.streakOverrides]);
+  const streakActivityKeys = useMemo(() => {
+    const keys = new Set(sessionDayKeys);
+    Object.entries(streakOverrideMap).forEach(([key, active]) => {
+      if (active) keys.add(key);
+      else keys.delete(key);
+    });
+    return keys;
+  }, [sessionDayKeys, streakOverrideMap]);
+  const toggleStreakDay = (day: Date) => {
+    const key = calendarDayKey(day);
+    const overrides = { ...streakOverrideMap, [key]: !streakActivityKeys.has(key) };
+    persist({ ...data, streakOverrides: overrides });
+  };
+  const restoreStreak = () => {
+    const today = new Date();
+    const lastActive = Array.from({ length: 400 }, (_, index) => shiftDate(today, -(index + 1)))
+      .find((day) => streakActivityKeys.has(calendarDayKey(day)));
+    const target = lastActive ? shiftDate(lastActive, 1) : shiftDate(today, -1);
+    const key = calendarDayKey(target);
+    persist({ ...data, streakOverrides: { ...streakOverrideMap, [key]: true } });
+    showToast("تم استرجاع الاستريك");
+  };
+  // Current streak: a gap of five consecutive untrained days ends the streak;
+  // shorter gaps are forgiven and can also be adjusted from the day chips.
   const currentStreak = useMemo(() => {
     let trainedCount = 0;
     let gapRun = 0;
     let cursor = new Date();
     for (let i = 0; i < 400; i += 1) {
-      if (sessionDayKeys.has(calendarDayKey(cursor))) {
+      if (streakActivityKeys.has(calendarDayKey(cursor))) {
         trainedCount += 1;
         gapRun = 0;
       } else {
         gapRun += 1;
-        if (gapRun >= 3) break;
+        if (gapRun >= 5) break;
       }
       cursor = shiftDate(cursor, -1);
     }
     return trainedCount;
-  }, [sessionDayKeys]);
-  // Today first, then the 5 days before it — matches the streak row's reading order in RTL.
+  }, [streakActivityKeys]);
+  // Today first, then the 4 days before it — the five-day streak window.
   const streakDayChips = useMemo(
-    () => Array.from({ length: 6 }, (_, index) => shiftDate(new Date(), -index)).map((day) => ({
+    () => Array.from({ length: 5 }, (_, index) => shiftDate(new Date(), -index)).map((day) => ({
       key: calendarDayKey(day),
       day,
-      trained: sessionDayKeys.has(calendarDayKey(day)),
+      trained: streakActivityKeys.has(calendarDayKey(day)),
       today: isToday(day.toISOString()),
     })),
-    [sessionDayKeys],
+    [streakActivityKeys],
   );
   const totalLoggedReps = useMemo(
     () => data.sessions.reduce((sum, session) => sum + countLoggedReps(session.exercises), 0),
@@ -1931,13 +1956,13 @@ export default function Home() {
           <span className="streak-card-title"><Flame size={14} /> سلسلة الأيام</span>
         </div>
         <div className="streak-body">
-          <div className="streak-day-strip" role="group" aria-label="آخر ستة أيام">
+          <div className="streak-day-strip" role="group" aria-label="آخر خمسة أيام">
             {streakDayChips.map(({ key, day, trained, today }) => (
-              <div className={`streak-day${today ? " is-today" : ""}`} key={key}>
+              <button type="button" className={`streak-day${today ? " is-today" : ""}`} key={key} onClick={() => toggleStreakDay(day)} aria-pressed={trained} aria-label={`${formatDate(day.toISOString())} — ${trained ? "نشط" : "غير نشط"}`}>
                 <span>{today ? "اليوم" : ARABIC_WEEK_INITIALS[day.getDay()]}</span>
                 <b>{day.getDate()}</b>
                 {trained ? <Check size={11} /> : <i className="streak-day-empty" />}
-              </div>
+              </button>
             ))}
           </div>
           <div className="streak-number">
@@ -1945,7 +1970,10 @@ export default function Home() {
             <span>أطول سلسلة أيام متتالية</span>
           </div>
         </div>
-        <p className="streak-note"><Info size={11} /> تستمر السلسلة طالما لم تتوقف 3 أيام متتالية</p>
+        <div className="streak-actions">
+          <p className="streak-note"><Info size={11} /> ينقطع الاستريك بعد 5 أيام متتالية بدون نشاط</p>
+          <button type="button" className="streak-restore" onClick={restoreStreak}><History size={13} /> استرجاع الاستريك</button>
+        </div>
       </section>
 
       <section className="section-block week-review-block">

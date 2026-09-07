@@ -440,6 +440,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .streak-body { display: flex; flex-direction: column; gap: 8px; }
 .streak-day-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
 .streak-day { display: grid; justify-items: center; gap: 3px; padding: 6px 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--canvas); }
+.streak-day { width: 100%; color: inherit; font: inherit; cursor: pointer; }
 .streak-day span { overflow: hidden; max-width: 100%; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .streak-day b { color: var(--ink); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .streak-day svg { color: var(--accent); }
@@ -459,6 +460,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .streak-note { display: flex; align-items: flex-start; gap: 5px; margin: 8px 0 0; color: var(--subtle); font-size: 10px; line-height: 1.4; }
 .streak-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--subtle); }
+.streak-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.streak-actions .streak-note { margin: 0; }
+.streak-restore { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; min-height: 28px; padding: 0 9px; border-radius: var(--r-pill); color: var(--accent); background: var(--accent-wash); font-size: 10px; font-weight: 650; }
+.streak-restore:active { transform: scale(.96); }
 
 /* Weekly review — a fixed day column beside a horizontally scrollable strip of
    exercise icons, one row per day in the selected range, most recent on top. */
