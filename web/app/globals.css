@@ -19,7 +19,7 @@
   --line: rgba(255, 255, 255, 0.07);
   --line-strong: rgba(255, 255, 255, 0.14);
 
-  /* Green is the single accent: active states, highlights, positive deltas. */
+  /* Green marks active states; orange flames mark historical weight records. */
   --accent: #4ade80;
   --accent-strong: #22c55e;
   --accent-ink: #052e16;
@@ -492,7 +492,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .week-exercise-strip { display: flex; gap: 14px; overflow-x: auto; padding: 2px 2px 2px 0; scrollbar-width: none; }
 .week-exercise-strip::-webkit-scrollbar { display: none; }
 .week-exercise-item { display: grid; justify-items: center; gap: 6px; flex: 0 0 auto; width: 58px; text-align: center; }
-.week-exercise-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 0; background: transparent; }
+.week-exercise-icon { position: relative; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 0; background: transparent; }
 .week-exercise-icon img { width: 48px; height: 48px; padding: 0; object-fit: contain; display: block; }
 .week-exercise-item small { overflow: hidden; display: -webkit-box; width: 100%; color: var(--muted); font-size: 10px; line-height: 1.3; text-overflow: ellipsis; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .week-rest { display: inline-block; color: var(--subtle); font-size: 13px; }
@@ -939,8 +939,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-row .history-date strong { color: var(--ink); font-size: 13px; font-weight: 600; }
 .history-row .history-date small { color: var(--muted); font-size: 11px; }
 .history-row b { color: var(--ink); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-/* The session holding this exercise's personal best is outlined in green. */
-.history-row.is-best { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+/* Each historical breakthrough keeps its flame after a later record. */
+.history-row.is-record { border-color: color-mix(in srgb, var(--sand) 40%, transparent); background: color-mix(in srgb, var(--sand) 7%, var(--surface)); }
 .history-head { min-height: 30px; padding-inline: 10px; border: 0; background: transparent; color: var(--muted); }
 .history-head span { font-size: 12px; text-align: center; }
 .history-head span:first-child { text-align: start; }
@@ -1210,3 +1210,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .meal-card { min-height: 60px; padding: 8px 10px; }
   .meal-card strong { font-size: 15px; }
 }
+
+/* Weight records: compact flames stay attached to their day or exercise. */
+.pr-badge { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: fit-content; flex: 0 0 auto; padding: 2px 5px; border-radius: 6px; color: var(--sand); background: color-mix(in srgb, var(--sand) 12%, var(--surface)); vertical-align: middle; line-height: 1; white-space: nowrap; }
+.pr-badge > span { font-size: 13px; line-height: 16px; }
+.pr-badge > b { font-size: 10px; font-weight: 750; font-family: inherit; }
+.pr-badge.compact { padding: 0; background: transparent; }
+.pr-legend { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: var(--muted); font-size: 11px; }
+.week-row-day .pr-badge { margin-top: 4px; }
+.week-exercise-icon > .pr-badge { position: absolute; inset-inline-end: -3px; bottom: -2px; padding: 2px; border-radius: 50%; background: var(--surface); }
+.history-date strong { display: inline-flex; align-items: center; gap: 4px; }
+.month-legend { flex-wrap: wrap; gap: 8px; }
+.month-day .pr-badge > span { font-size: 11px; line-height: 12px; }

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { buildSessionRecords } from "./personal-records";
 import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner } from "./auth";
@@ -599,6 +600,15 @@ function EmptyState({
   );
 }
 
+function RecordBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className={`pr-badge${compact ? " compact" : ""}`} role="img" aria-label="رقم قياسي جديد في الوزن" title="رقم قياسي جديد في الوزن">
+      <span aria-hidden="true">🔥</span>
+      {!compact && <b aria-hidden="true">PR</b>}
+    </span>
+  );
+}
+
 // Shared by the Workout and Nutrition tabs: a compact, swipeable day rail and
 // an optional month calendar that marks activity days.
 function DaySelector({
@@ -608,6 +618,7 @@ function DaySelector({
   label,
   activityKeys,
   activityLabel,
+  recordDayKeys,
 }: {
   selectedDay: Date;
   onSelect: (day: Date) => void;
@@ -615,6 +626,7 @@ function DaySelector({
   label: string;
   activityKeys: ReadonlySet<string>;
   activityLabel: string;
+  recordDayKeys?: ReadonlySet<string>;
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1, 12));
@@ -665,9 +677,9 @@ function DaySelector({
               className={`day-card${selected ? " selected" : ""}${today ? " today" : ""}`}
               onClick={() => onSelect(day)}
               aria-pressed={selected}
-              aria-label={formatDayHeading(day.toISOString())}
+              aria-label={`${formatDayHeading(day.toISOString())}${recordDayKeys?.has(key) ? " — رقم قياسي جديد" : ""}`}
             >
-              <span className="day-weekday">{ARABIC_WEEK_DAYS[day.getDay()]}</span>
+              <span className="day-weekday">{ARABIC_WEEK_DAYS[day.getDay()]} {recordDayKeys?.has(key) && <RecordBadge compact />}</span>
               <b className="day-number">{day.getDate()}</b>
               <small className="day-month">{LATIN_MONTHS[day.getMonth()]}</small>
               {count > 0 && <span className="day-count"><i />{formatNumber(count)}</span>}
@@ -711,14 +723,14 @@ function DaySelector({
                     className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${active ? " trained" : ""}`}
                     onClick={() => { setCalendarMonth(new Date(day.getFullYear(), day.getMonth(), 1, 12)); onSelect(day); }}
                     aria-pressed={selected}
-                    aria-label={`${formatDayHeading(day.toISOString())}${active ? ` — ${activityLabel}` : ""}`}
+                    aria-label={`${formatDayHeading(day.toISOString())}${active ? ` — ${activityLabel}` : ""}${recordDayKeys?.has(key) ? " — رقم قياسي جديد" : ""}`}
                   >
-                    <b>{formatNumber(day.getDate())}</b><i />
+                    <b>{formatNumber(day.getDate())}</b>{recordDayKeys?.has(key) ? <RecordBadge compact /> : <i />}
                   </button>
                 );
               })}
             </div>
-            <div className="month-legend"><span><i /> {activityLabel}</span><span>{activityKeys.size ? `${formatNumber(activityKeys.size)} يوم` : "لا توجد أيام بعد"}</span></div>
+            <div className="month-legend"><span><i /> {activityLabel}</span>{recordDayKeys && <span><RecordBadge compact /> رقم جديد</span>}<span>{activityKeys.size ? `${formatNumber(activityKeys.size)} يوم` : "لا توجد أيام بعد"}</span></div>
           </div>
         )}
       </div>
@@ -896,6 +908,10 @@ export default function Home() {
     () => [...data.sessions].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()),
     [data.sessions],
   );
+  const sessionRecords = useMemo(() => buildSessionRecords(data.sessions), [data.sessions]);
+  const recordDayKeys = useMemo(() => new Set(data.sessions
+    .filter((session) => sessionRecords.has(session.id))
+    .map((session) => calendarDayKey(session.completedAt))), [data.sessions, sessionRecords]);
   // First open of the log should land on something worth seeing: if today has no
   // session but earlier ones exist, default to the most recent trained day instead
   // of an empty "today". Any explicit pick by the user overrides this permanently.
@@ -969,9 +985,9 @@ export default function Home() {
             const match = session.exercises.find((item) => item.exerciseId === id);
             return sum + (match?.sets.length ?? 0);
           }, 0);
-          return { id, name: meta.name, setCount, muscle: meta.primaryMuscle };
+          return { id, name: meta.name, setCount, muscle: meta.primaryMuscle, isRecord: daySessions.some((session) => sessionRecords.get(session.id)?.has(id)) };
         })
-        .filter((item): item is { id: string; name: string; setCount: number; muscle: string } => item !== null);
+        .filter((item): item is { id: string; name: string; setCount: number; muscle: string; isRecord: boolean } => item !== null);
       return {
         key,
         day,
@@ -979,7 +995,7 @@ export default function Home() {
         volume: daySessions.reduce((sum, session) => sum + workoutVolume(session.exercises), 0),
       };
     }).filter((entry) => !weekOnlyTrained || entry.exercises.length > 0);
-  }, [sortedSessions, exerciseCatalog, weekRangeDays, weekMuscleFilter, weekOnlyTrained]);
+  }, [sortedSessions, exerciseCatalog, sessionRecords, weekRangeDays, weekMuscleFilter, weekOnlyTrained]);
   const streakOverrideMap = useMemo(() => data.streakOverrides ?? {}, [data.streakOverrides]);
   const streakActivityKeys = useMemo(() => {
     const keys = new Set(sessionDayKeys);
@@ -1109,6 +1125,7 @@ export default function Home() {
       setCount: sets.length,
       repLabel: Math.min(...reps) === Math.max(...reps) ? String(reps[0]) : `${Math.min(...reps)}–${Math.max(...reps)}`,
       maxWeight: Math.max(...sets.map((set) => set.weightKg)),
+      isRecord: sessionRecords.get(session.id)?.has(exerciseId) ?? false,
     }];
   }).slice(0, 4);
   // The session being logged is already reconciled into data.sessions, so anything
@@ -1658,6 +1675,7 @@ export default function Home() {
             onSelect={selectWorkoutDate}
             countFor={(day) => sortedSessions.filter((session) => calendarDayKey(session.completedAt) === calendarDayKey(day)).length}
             label="اختيار يوم التمرين"
+            recordDayKeys={recordDayKeys}
             activityKeys={workoutDayKeys}
             activityLabel="أيام التمرين"
           />
@@ -2027,6 +2045,7 @@ export default function Home() {
           </div>
         )}
 
+        <p className="pr-legend"><RecordBadge /> وزن أعلى من كل حصصك السابقة لنفس التمرين</p>
         <div className="week-review">
           {weekReviewDays.length === 0 && (
             <p className="week-review-empty">لا توجد أيام تمرين في هذا النطاق</p>
@@ -2038,7 +2057,7 @@ export default function Home() {
                 <div className="week-row-day">
                   <strong>{today ? "اليوم" : ARABIC_WEEK_DAYS[day.getDay()]}</strong>
                   <span>{day.getDate()} {LATIN_MONTHS[day.getMonth()]}</span>
-                  {volume > 0 && <i className="week-row-dot" />}
+                  {exercises.some((exercise) => exercise.isRecord) ? <RecordBadge /> : volume > 0 && <i className="week-row-dot" />}
                 </div>
                 <div className="week-row-body">
                   {exercises.length ? (
@@ -2049,6 +2068,7 @@ export default function Home() {
                             {muscleGroupImage(exercise.muscle) ? (
                               <img src={muscleGroupImage(exercise.muscle) ?? undefined} alt="" loading="lazy" />
                             ) : <Dumbbell size={16} />}
+                            {exercise.isRecord && <RecordBadge compact />}
                           </span>
                           <small>{exercise.name}</small>
                         </div>
@@ -2111,10 +2131,10 @@ export default function Home() {
                         className={`month-day${selected ? " selected" : ""}${today ? " today" : ""}${trained ? " trained" : ""}`}
                         onClick={() => { setHistoryDateOverride(day); setExpandedSessionId(null); setCalendarExpanded(false); }}
                         aria-pressed={selected}
-                        aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}`}
+                        aria-label={`${formatDayHeading(day.toISOString())}${trained ? " — يوم تمرين" : ""}${recordDayKeys.has(key) ? " — رقم قياسي جديد" : ""}`}
                       >
                         <b>{formatNumber(day.getDate())}</b>
-                        <i />
+                        {recordDayKeys.has(key) ? <RecordBadge compact /> : <i />}
                       </button>
                     );
                   })}
@@ -2122,6 +2142,7 @@ export default function Home() {
 
                 <div className="month-legend">
                   <span><i /> يوم تمرين</span>
+                  <span><RecordBadge compact /> رقم جديد</span>
                   <b>{countLabel(monthSessionCount, "حصة واحدة هذا الشهر", "حصص هذا الشهر")}</b>
                 </div>
               </div>
@@ -2146,7 +2167,7 @@ export default function Home() {
                   >
                     <span className="log-symbol"><Dumbbell size={19} /></span>
                     <span className="log-title">
-                      <strong>{session.name}</strong>
+                      <strong>{session.name} {sessionRecords.has(session.id) && <RecordBadge />}</strong>
                       <small>{formatTime(session.completedAt)} · {countLabel(session.exercises.length, "تمرين واحد", "تمارين")} · {countLabel(countLoggedSets(session.exercises), "مجموعة واحدة", "مجموعات")}</small>
                     </span>
                     <ChevronDown className="log-chevron" size={19} />
@@ -2160,7 +2181,7 @@ export default function Home() {
                         return (
                           <div className="log-exercise" key={exercise.exerciseId}>
                             <div className="log-exercise-head">
-                              <strong>{meta?.name ?? "تمرين محذوف"}</strong>
+                              <strong>{meta?.name ?? "تمرين محذوف"} {sessionRecords.get(session.id)?.has(exercise.exerciseId) && <RecordBadge />}</strong>
                               <small>{countLabel(exercise.sets.length, "مجموعة واحدة", "مجموعات")}</small>
                             </div>
                             <div className="log-sets">
@@ -2366,20 +2387,17 @@ export default function Home() {
                   {exerciseHistory.length ? (
                     <div className="history-table">
                       <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
-                      {(() => {
-                        const bestWeight = Math.max(...exerciseHistory.map((entry) => entry.maxWeight));
-                        return exerciseHistory.map((entry) => (
-                          <div className={`history-row${entry.maxWeight === bestWeight ? " is-best" : ""}`} key={entry.id}>
-                            <span className="history-date">
-                              <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]}</strong>
-                              <small>{formatDate(entry.date)}</small>
-                            </span>
-                            <b>{formatNumber(entry.setCount)}</b>
-                            <b dir="ltr">{entry.repLabel}</b>
-                            <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
-                          </div>
-                        ));
-                      })()}
+                      {exerciseHistory.map((entry) => (
+                        <div className={`history-row${entry.isRecord ? " is-record" : ""}`} key={entry.id}>
+                          <span className="history-date">
+                            <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>
+                            <small>{formatDate(entry.date)}</small>
+                          </span>
+                          <b>{formatNumber(entry.setCount)}</b>
+                          <b dir="ltr">{entry.repLabel}</b>
+                          <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
+                        </div>
+                      ))}
                     </div>
                   ) : <p className="history-empty">سجّل أول أداء لك، وسيظهر هنا في المرة القادمة.</p>}
                 </section>
