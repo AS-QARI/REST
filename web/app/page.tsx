@@ -4,6 +4,7 @@
 import {
   Activity,
   ArrowLeft,
+  ArrowUpDown,
   Calendar,
   Camera,
   Check,
@@ -820,6 +821,7 @@ export default function Home() {
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentMuscleGroup, setEquipmentMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentSearch, setEquipmentSearch] = useState("");
+  const [equipmentReorder, setEquipmentReorder] = useState(false);
   const [, setSelectedExerciseId] = useState("");
   const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
   const [selectedMealDate, setSelectedMealDate] = useState(() => new Date());
@@ -1102,12 +1104,17 @@ export default function Home() {
   const exercisesInSelectedGroup = useMemo(
     () => {
       const query = exerciseSearch.trim().toLocaleLowerCase("en");
-      return exerciseCatalog.filter((exercise) =>
-        (selectedMuscleGroup === "All" || muscleGroupFor(exercise.primaryMuscle) === selectedMuscleGroup)
-        && (!query || exercise.name.toLocaleLowerCase("en").includes(query)),
-      );
+      // The equipment screen's order is the picker's order; exercises without a
+      // saved machine (built-ins) follow in their original order (sort is stable).
+      const equipmentRank = new Map(data.equipment.map((equipment, index) => [equipment.id, index]));
+      return exerciseCatalog
+        .filter((exercise) =>
+          (selectedMuscleGroup === "All" || muscleGroupFor(exercise.primaryMuscle) === selectedMuscleGroup)
+          && (!query || exercise.name.toLocaleLowerCase("en").includes(query)),
+        )
+        .sort((a, b) => (equipmentRank.get(a.equipmentId) ?? Infinity) - (equipmentRank.get(b.equipmentId) ?? Infinity));
     },
-    [exerciseCatalog, exerciseSearch, selectedMuscleGroup],
+    [data.equipment, exerciseCatalog, exerciseSearch, selectedMuscleGroup],
   );
   const filteredEquipment = useMemo(() => {
     const query = equipmentSearch.trim().toLocaleLowerCase();
@@ -1245,6 +1252,19 @@ export default function Home() {
     setSelectedExerciseId(activeWorkout.exercises[0]?.exerciseId || "");
     setTab("workout");
     if (activeWorkout.exercises.length === 0) setSheet("exercise");
+  };
+
+  // Moves a machine one step within the list on screen (e.g. only the chest
+  // machines) by swapping it with its visible neighbour in the saved order.
+  const moveEquipment = (id: string, step: -1 | 1) => {
+    const visibleIndex = filteredEquipment.findIndex((item) => item.id === id);
+    const neighbour = filteredEquipment[visibleIndex + step];
+    if (visibleIndex < 0 || !neighbour) return;
+    const equipment = [...data.equipment];
+    const from = equipment.findIndex((item) => item.id === id);
+    const to = equipment.findIndex((item) => item.id === neighbour.id);
+    [equipment[from], equipment[to]] = [equipment[to], equipment[from]];
+    persist({ ...data, equipment });
   };
 
   const deleteEquipment = (id: string) => {
@@ -1836,7 +1856,14 @@ export default function Home() {
         <section className="section-block">
           <div className="section-title">
             <div><p className="eyebrow">مكتبتك الشخصية</p><h2>الأجهزة</h2></div>
-            <button className="text-action" onClick={() => openEquipmentSheet()}><Plus size={17} /> إضافة جهاز</button>
+            <div className="section-title-actions">
+              {data.equipment.length > 1 && (
+                <button className={`text-action reorder-toggle${equipmentReorder ? " active" : ""}`} onClick={() => setEquipmentReorder((on) => !on)} aria-pressed={equipmentReorder}>
+                  {equipmentReorder ? <><Check size={16} /> تم</> : <><ArrowUpDown size={16} /> ترتيب</>}
+                </button>
+              )}
+              {!equipmentReorder && <button className="text-action" onClick={() => openEquipmentSheet()}><Plus size={17} /> إضافة جهاز</button>}
+            </div>
           </div>
           {data.equipment.length === 0 ? (
             <EmptyState icon={<Camera size={27} />} title="سجّل أول جهاز" body="صوّر الجهاز، اكتب اسمه، واختر العضلة الأساسية. البقية اختيارية." action={<AppButton onClick={() => openEquipmentSheet()} icon={<Camera size={18} />}>إضافة جهاز</AppButton>} />
@@ -1849,19 +1876,34 @@ export default function Home() {
               <div className="filter-rail" role="group" aria-label="المجموعات العضلية" dir="ltr">
                 {(["All", ...MUSCLE_GROUPS] as const).map((group) => <button type="button" key={group} className={equipmentMuscleGroup === group ? "selected" : ""} onClick={() => setEquipmentMuscleGroup(group)}>{group === "All" ? "الكل" : MUSCLE_GROUP_LABELS[group]}</button>)}
               </div>
+              {equipmentReorder && (
+                <p className="reorder-hint">
+                  رتّب {equipmentMuscleGroup === "All" ? "أجهزتك" : `أجهزة ال${MUSCLE_GROUP_LABELS[equipmentMuscleGroup]}`} بالأسهم — نفس الترتيب يظهر لك لما تضيف تمرين.
+                </p>
+              )}
               {filteredEquipment.length === 0 ? (
                 <div className="library-empty"><Search size={20} /><span>لا توجد أجهزة مطابقة</span></div>
               ) : (
                 <div className="equipment-list">
-                  {filteredEquipment.map((equipment) => (
-                    <article className="equipment-card" key={equipment.id}>
+                  {filteredEquipment.map((equipment, index) => (
+                    <article className={`equipment-card${equipmentReorder ? " reordering" : ""}`} key={equipment.id}>
+                      {equipmentReorder && <b className="equipment-rank">{formatNumber(index + 1)}</b>}
                       <div className="equipment-image">
                         {equipment.photos?.length ? <img src={equipment.photos[0]} alt={`صورة ${equipment.name}`} /> : <Dumbbell size={26} />}
                         {equipment.photos && equipment.photos.length > 1 && <span className="equipment-photo-count">{equipment.photos.length}</span>}
                       </div>
                       <div><h2>{equipment.name}</h2><p>{muscleGroupLabel(equipment.primaryMuscle)} · {equipment.type}</p><span>{countLabel(data.exercises.filter((item) => item.equipmentId === equipment.id).length, "تمرين واحد مرتبط", "تمارين مرتبطة")}</span></div>
-                      <button className="card-edit" onClick={() => openEquipmentSheet(equipment)} aria-label={`تعديل ${equipment.name}`}><Pencil size={17} /></button>
-                      <button className="card-delete" onClick={() => deleteEquipment(equipment.id)} aria-label={`حذف ${equipment.name}`}><Trash2 size={18} /></button>
+                      {equipmentReorder ? (
+                        <div className="equipment-order">
+                          <button type="button" onClick={() => moveEquipment(equipment.id, -1)} disabled={index === 0} aria-label={`تقديم ${equipment.name}`}><ChevronUp size={18} /></button>
+                          <button type="button" onClick={() => moveEquipment(equipment.id, 1)} disabled={index === filteredEquipment.length - 1} aria-label={`تأخير ${equipment.name}`}><ChevronDown size={18} /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="card-edit" onClick={() => openEquipmentSheet(equipment)} aria-label={`تعديل ${equipment.name}`}><Pencil size={17} /></button>
+                          <button className="card-delete" onClick={() => deleteEquipment(equipment.id)} aria-label={`حذف ${equipment.name}`}><Trash2 size={18} /></button>
+                        </>
+                      )}
                     </article>
                   ))}
                 </div>

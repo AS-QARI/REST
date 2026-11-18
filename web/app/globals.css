@@ -146,6 +146,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .meal-card .card-delete, .meal-card .card-edit { margin-inline-start: 4px; }
 .equipment-card .card-edit { margin-inline-start: auto; }
 .equipment-card .card-delete { margin-inline-start: 2px; }
+/* Equipment reorder mode: arrows replace edit/delete; the order feeds the exercise picker. */
+.section-title-actions { display: flex; align-items: center; gap: 14px; }
+.reorder-toggle { color: var(--ink-dim); }
+.reorder-toggle.active { color: var(--accent); }
+.reorder-hint { margin: 0 4px 10px; color: var(--muted); font-size: 12px; }
+.equipment-rank { display: grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; border-radius: var(--r-pill); color: var(--ink-dim); background: var(--surface-soft); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.equipment-order { display: flex; gap: 6px; margin-inline-start: auto; }
+.equipment-order button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); color: var(--ink); background: var(--surface-soft); transition: background .16s ease; }
+.equipment-order button:active { transform: scale(.94); }
+.equipment-order button:disabled { opacity: .3; }
 
 /* ============================================================
    App shell
