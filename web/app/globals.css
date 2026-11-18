@@ -74,7 +74,7 @@
    Base / reset
    ============================================================ */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { min-height: 100%; background: var(--canvas-deep); }
+html { min-height: 100%; background: var(--canvas-deep); touch-action: manipulation; /* no double-tap zoom */ }
 body { min-height: 100%; margin: 0; background: var(--canvas-deep); color: var(--ink); letter-spacing: -.012em; font-family: var(--font-arabic), "SF Arabic", "Geeza Pro", Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input, select, textarea { font: inherit; }
 button, a { touch-action: manipulation; }
@@ -236,12 +236,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .exercise-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; width: 100%; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; transition: border-color .16s ease, background .16s ease; }
 .exercise-summary:hover { border-color: var(--line-strong); background: var(--surface-raised); }
 .exercise-summary:active { transform: scale(.99); }
-/* Day-vs-history grade: one shared strength, only the hue changes. Never green (--accent). */
-.exercise-summary.tone-dip { --tone: var(--yellow); }
-.exercise-summary.tone-progress { --tone: var(--blue); }
-.exercise-summary.tone-record { --tone: var(--violet); }
-.exercise-summary[class*="tone-"] { border-color: color-mix(in srgb, var(--tone) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 18%, transparent), 0 0 18px color-mix(in srgb, var(--tone) 16%, transparent); }
-.exercise-summary[class*="tone-"]:hover { border-color: color-mix(in srgb, var(--tone) 70%, transparent); }
+/* Day-vs-history grade. Glow strength follows the rank: violet (new weight) >
+   blue (more reps) > yellow (weaker day). Never green (--accent). */
+.exercise-summary.tone-dip { --tone: var(--yellow); --tone-border: 55%; --tone-ring: 18%; --tone-glow: 16%; --tone-blur: 18px; }
+.exercise-summary.tone-progress { --tone: var(--blue); --tone-border: 65%; --tone-ring: 24%; --tone-glow: 24%; --tone-blur: 22px; }
+.exercise-summary.tone-record { --tone: var(--violet); --tone-border: 80%; --tone-ring: 32%; --tone-glow: 36%; --tone-blur: 28px; }
+.exercise-summary[class*="tone-"] { border-color: color-mix(in srgb, var(--tone) var(--tone-border), transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) var(--tone-ring), transparent), 0 0 var(--tone-blur) color-mix(in srgb, var(--tone) var(--tone-glow), transparent); }
+.exercise-summary[class*="tone-"]:hover { border-color: var(--tone); }
 .exercise-summary-icon { display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-md); color: var(--muted); background: var(--surface-soft); }
 .exercise-summary-icon img { width: 100%; height: 100%; object-fit: cover; }
 .exercise-summary-title { display: grid; gap: 5px; min-width: 0; }
@@ -941,8 +942,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-title span em { color: var(--muted); font-size: 12px; font-style: normal; font-weight: 500; }
 /* Full history scrolls inside the card (newest on top, first session at the bottom);
    off-screen rows skip layout/paint so long histories stay cheap. */
-.history-table { display: grid; gap: 4px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 8px; outline: 0; }
-.history-table > .history-row:not(.history-head) { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+.history-table { position: relative; display: grid; gap: 4px; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 8px; outline: 0; }
+.history-table > .history-older { content-visibility: auto; contain-intrinsic-size: auto 52px; }
 .history-table > .history-head { position: sticky; top: 0; z-index: 1; background: var(--canvas); }
 .history-row { display: grid; grid-template-columns: 1.4fr .7fr .8fr .9fr; align-items: center; gap: 6px; min-height: 52px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-sm); background: var(--surface); font-size: 13px; }
 .history-row > *:not(:first-child) { text-align: center; }
@@ -952,6 +953,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-row b { color: var(--ink); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* Each historical breakthrough keeps its flame after a later record. */
 .history-row.is-record { border-color: color-mix(in srgb, var(--sand) 40%, transparent); background: color-mix(in srgb, var(--sand) 7%, var(--surface)); }
+/* Fifth row: the strongest session ever, pinned under the latest four. */
+.history-row.is-best { border-color: color-mix(in srgb, var(--violet) 45%, transparent); background: color-mix(in srgb, var(--violet) 8%, var(--surface)); }
+.history-row.is-best .history-date strong { display: inline-flex; align-items: center; gap: 4px; color: var(--violet); }
+.history-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 0; padding: 0 12px 10px; color: var(--muted); font-size: 11px; }
 .history-head { min-height: 30px; padding-inline: 10px; border: 0; background: transparent; color: var(--muted); }
 .history-head span { font-size: 12px; text-align: center; }
 .history-head span:first-child { text-align: start; }

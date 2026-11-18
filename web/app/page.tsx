@@ -877,6 +877,13 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [tab, workoutView]);
 
+  // iOS ignores user-scalable=no for pinch gestures; block them so the app never zooms.
+  useEffect(() => {
+    const preventZoom = (event: Event) => event.preventDefault();
+    document.addEventListener("gesturestart", preventZoom);
+    return () => document.removeEventListener("gesturestart", preventZoom);
+  }, []);
+
   const persist = (raw: AppData) => {
     const next = reconcileActiveWorkoutIntoSessions(raw);
     setData(next);
@@ -1118,15 +1125,29 @@ export default function Home() {
     const workingSets = logged.sets.filter((set) => set.type === "working");
     const sets = workingSets.length ? workingSets : logged.sets;
     const reps = sets.map((set) => set.reps);
+    const maxWeight = Math.max(...sets.map((set) => set.weightKg));
     return [{
       id: session.id,
       date: session.completedAt,
       setCount: sets.length,
       repLabel: Math.min(...reps) === Math.max(...reps) ? String(reps[0]) : `${Math.min(...reps)}–${Math.max(...reps)}`,
-      maxWeight: Math.max(...sets.map((set) => set.weightKg)),
+      maxWeight,
+      topReps: Math.max(...sets.filter((set) => set.weightKg === maxWeight).map((set) => set.reps)),
       isRecord: sessionRecords.get(session.id)?.has(exerciseId) ?? false,
     }];
   });
+  // The history scroller opens on five rows (last 4 sessions + the strongest one);
+  // size it to those rows so everything older is one scroll away.
+  const fitHistoryToFiveRows = (table: HTMLDivElement | null) => {
+    if (!table) return;
+    const fit = () => {
+      const rows = table.querySelectorAll<HTMLElement>(":scope > .history-row:not(.history-head)");
+      const fifth = rows.length > 5 ? rows[4] : undefined;
+      table.style.maxHeight = fifth ? `${fifth.offsetTop + fifth.offsetHeight + 8}px` : "";
+    };
+    fit();
+    void document.fonts?.ready.then(fit);
+  };
   // The session being logged is already reconciled into data.sessions, so anything
   // that should read as "before today" has to skip it by id — otherwise the card
   // just mirrors the set that was entered a moment ago.
@@ -1143,6 +1164,12 @@ export default function Home() {
   const exerciseHistory = getExerciseHistory(exerciseToAdd);
   const exercisePersonalBest = getExercisePersonalBest(exerciseToAdd);
   const daysSinceLastTrained = exerciseHistory.length ? daysSince(exerciseHistory[0].date) : null;
+  // Strongest session: heaviest top weight, then most reps at it; newest wins a tie.
+  const strongestHistoryEntry = exerciseHistory.length > 1
+    ? exerciseHistory.reduce((best, entry) => (
+      entry.maxWeight > best.maxWeight || (entry.maxWeight === best.maxWeight && entry.topReps > best.topReps) ? entry : best
+    ))
+    : undefined;
   // Everything framed as "before this session" measures against the session on screen.
   const sessionCutoff = data.activeWorkout
     ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt }
@@ -2384,20 +2411,31 @@ export default function Home() {
                     <small>{daysSinceLastTrained !== null ? daysAgoLabel(daysSinceLastTrained) : "أول مرة"}</small>
                   </div>
                   {exerciseHistory.length ? (
-                    <div className="history-table" tabIndex={0} aria-label="كل الجلسات من الأحدث إلى الأقدم">
-                      <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
-                      {exerciseHistory.map((entry) => (
-                        <div className={`history-row${entry.isRecord ? " is-record" : ""}`} key={entry.id}>
-                          <span className="history-date">
-                            <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>
-                            <small>{formatDate(entry.date)}{new Date(entry.date).getFullYear() !== new Date().getFullYear() && ` ${new Date(entry.date).getFullYear()}`}</small>
-                          </span>
-                          <b>{formatNumber(entry.setCount)}</b>
-                          <b dir="ltr">{entry.repLabel}</b>
-                          <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="history-table" tabIndex={0} ref={fitHistoryToFiveRows} aria-label="آخر 4 جلسات ثم أقوى جلسة، والأقدم بالتمرير">
+                        <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
+                        {[
+                          ...exerciseHistory.slice(0, 4).map((entry) => ({ entry, kind: "recent" as const })),
+                          ...(strongestHistoryEntry ? [{ entry: strongestHistoryEntry, kind: "best" as const }] : []),
+                          ...exerciseHistory.slice(4).map((entry) => ({ entry, kind: "older" as const })),
+                        ].map(({ entry, kind }) => (
+                          <div className={`history-row${kind === "best" ? " is-best" : entry.isRecord ? " is-record" : ""}${kind === "older" ? " history-older" : ""}`} key={`${kind}-${entry.id}`}>
+                            <span className="history-date">
+                              {kind === "best"
+                                ? <strong><Trophy size={12} /> أقوى جلسة</strong>
+                                : <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>}
+                              <small>{formatDate(entry.date)}{new Date(entry.date).getFullYear() !== new Date().getFullYear() && ` ${new Date(entry.date).getFullYear()}`}</small>
+                            </span>
+                            <b>{formatNumber(entry.setCount)}</b>
+                            <b dir="ltr">{entry.repLabel}</b>
+                            <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
+                          </div>
+                        ))}
+                      </div>
+                      {exerciseHistory.length > 4 && (
+                        <p className="history-more"><ChevronDown size={14} /> اسحب لعرض {countLabel(exerciseHistory.length - 4, "جلسة أقدم", "جلسات أقدم")}</p>
+                      )}
+                    </>
                   ) : <p className="history-empty">سجّل أول أداء لك، وسيظهر هنا في المرة القادمة.</p>}
                 </section>
 
