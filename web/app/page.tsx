@@ -39,6 +39,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { buildSessionRecords } from "./personal-records";
+import { exercisePerformanceTone } from "./exercise-performance";
 import { LOOPREP_SESSIONS } from "./looprep-data";
 import { loadAppData, saveAppData } from "./storage";
 import { authenticateOwner } from "./auth";
@@ -812,15 +813,14 @@ export default function Home() {
   const [exerciseSearch, setExerciseSearch] = useState("");
   const [exerciseDraftSets, setExerciseDraftSets] = useState<ExerciseDraftSet[]>([]);
   const [exerciseNotes, setExerciseNotes] = useState("");
-  const [showExerciseNotes, setShowExerciseNotes] = useState(false);
-  // Set type and RIR apply to the whole draft batch; both stay tucked behind the
-  // same disclosure as notes so the default logging view matches the design.
+  // Notes, set type and RIR have no controls in the logger; they are loaded from the
+  // card being edited and written back unchanged so existing data is preserved.
   const [draftSetType, setDraftSetType] = useState<"working" | "warmup">("working");
   const [draftRir, setDraftRir] = useState("2");
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentMuscleGroup, setEquipmentMuscleGroup] = useState<MuscleGroup | "All">("All");
   const [equipmentSearch, setEquipmentSearch] = useState("");
-  const [selectedExerciseId, setSelectedExerciseId] = useState("");
+  const [, setSelectedExerciseId] = useState("");
   const [selectedWorkoutDate, setSelectedWorkoutDate] = useState(() => new Date());
   const [selectedMealDate, setSelectedMealDate] = useState(() => new Date());
   const [historyDateOverride, setHistoryDateOverride] = useState<Date | null>(null);
@@ -1111,7 +1111,6 @@ export default function Home() {
     });
   }, [data.equipment, equipmentMuscleGroup, equipmentSearch]);
   const exerciseDraftMeta = exerciseCatalog.find((exercise) => exercise.id === exerciseToAdd);
-  const draftAlreadyLogged = data.activeWorkout?.exercises.some((item) => item.exerciseId === exerciseToAdd) ?? false;
   const getExerciseHistory = (exerciseId: string, before?: { id: string; date: string }) => sortedSessions.flatMap((session) => {
     if (isAtOrAfter(session, before)) return [];
     const logged = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
@@ -1127,7 +1126,7 @@ export default function Home() {
       maxWeight: Math.max(...sets.map((set) => set.weightKg)),
       isRecord: sessionRecords.get(session.id)?.has(exerciseId) ?? false,
     }];
-  }).slice(0, 4);
+  });
   // The session being logged is already reconciled into data.sessions, so anything
   // that should read as "before today" has to skip it by id — otherwise the card
   // just mirrors the set that was entered a moment ago.
@@ -1182,6 +1181,15 @@ export default function Home() {
     return undefined;
   };
   const latestSetFor = (exerciseId: string) => latestPerformanceFor(exerciseId)?.set;
+  // Earlier sessions only (newest first), so the day on screen is graded against its past.
+  const performanceToneFor = (item: WorkoutExercise) => exercisePerformanceTone(
+    item.sets,
+    sortedSessions.flatMap((session) => {
+      if (isAtOrAfter(session, sessionCutoff)) return [];
+      const logged = session.exercises.find((entry) => entry.exerciseId === item.exerciseId);
+      return logged?.sets.length ? [logged.sets] : [];
+    }),
+  );
 
   const startWorkout = (template?: Template) => {
     const base: ActiveWorkout = data.activeWorkout ?? {
@@ -1237,15 +1245,6 @@ export default function Home() {
     const previous = data;
     persist({ ...data, sessions: data.sessions.filter((session) => session.id !== id) });
     showToast("تم حذف الحصة", () => persist(previous));
-  };
-
-  const removeExerciseFromWorkout = (exerciseId: string) => {
-    if (!data.activeWorkout) return;
-    const previous = data;
-    const remainingExercises = data.activeWorkout.exercises.filter((item) => item.exerciseId !== exerciseId);
-    persist({ ...data, activeWorkout: { ...data.activeWorkout, exercises: remainingExercises } });
-    if (selectedExerciseId === exerciseId) setSelectedExerciseId(remainingExercises[0]?.exerciseId ?? "");
-    showToast("تم إزالة التمرين من الحصة", () => persist(previous));
   };
 
   const logout = () => {
@@ -1374,7 +1373,6 @@ export default function Home() {
     setExerciseToAdd("");
     setExerciseDraftSets([]);
     setExerciseNotes("");
-    setShowExerciseNotes(false);
     setDraftSetType("working");
     setDraftRir("2");
   };
@@ -1390,7 +1388,6 @@ export default function Home() {
     setExerciseNotes(loggedExercise?.notes ?? "");
     setDraftSetType(setsToEdit?.at(-1)?.type ?? "working");
     setDraftRir(String(setsToEdit?.at(-1)?.rir ?? 2));
-    setShowExerciseNotes(false);
   };
 
   // The single logging entry point: opens the sheet on the picker, or straight on
@@ -1729,13 +1726,15 @@ export default function Home() {
                   const max = Math.max(...values);
                   return min === max ? formatNumber(min) : `${formatNumber(min)}-${formatNumber(max)}`;
                 };
+                const tone = performanceToneFor(item);
+                const toneLabel = tone === "record" ? " — وزن جديد" : tone === "progress" ? " — تحسن في العدات" : tone === "dip" ? " — عدات أقل من المعتاد" : "";
                 return (
                   <button
                     type="button"
-                    className="exercise-summary"
+                    className={`exercise-summary${tone ? ` tone-${tone}` : ""}`}
                     key={item.exerciseId}
                     onClick={() => openExerciseSheet(exercise.id)}
-                    aria-label={`تعديل ${exercise.name}`}
+                    aria-label={`تعديل ${exercise.name}${toneLabel}`}
                   >
                     <span className="exercise-summary-icon">
                       {photo ? <img src={photo} alt="" /> : <Dumbbell size={24} />}
@@ -2379,19 +2378,19 @@ export default function Home() {
                   </div>
                 </div>
 
-                <section className="exercise-history-card" aria-label="آخر أداء للتمرين">
+                <section className="exercise-history-card" aria-label="سجل التمرين الكامل">
                   <div className="history-title">
-                    <span><History size={17} /> آخر التمارين</span>
+                    <span><History size={17} /> سجل التمرين{exerciseHistory.length > 0 && <em>{countLabel(exerciseHistory.length, "جلسة واحدة", "جلسة")}</em>}</span>
                     <small>{daysSinceLastTrained !== null ? daysAgoLabel(daysSinceLastTrained) : "أول مرة"}</small>
                   </div>
                   {exerciseHistory.length ? (
-                    <div className="history-table">
+                    <div className="history-table" tabIndex={0} aria-label="كل الجلسات من الأحدث إلى الأقدم">
                       <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
                       {exerciseHistory.map((entry) => (
                         <div className={`history-row${entry.isRecord ? " is-record" : ""}`} key={entry.id}>
                           <span className="history-date">
                             <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>
-                            <small>{formatDate(entry.date)}</small>
+                            <small>{formatDate(entry.date)}{new Date(entry.date).getFullYear() !== new Date().getFullYear() && ` ${new Date(entry.date).getFullYear()}`}</small>
                           </span>
                           <b>{formatNumber(entry.setCount)}</b>
                           <b dir="ltr">{entry.repLabel}</b>
@@ -2413,41 +2412,6 @@ export default function Home() {
                   ))}
                   <button type="button" className="add-draft-set" onClick={addExerciseDraftSet}><Plus size={17} /> إضافة جلسة</button>
                 </section>
-
-                <div className="logger-extras-row">
-                  <button type="button" className="notes-toggle" onClick={() => setShowExerciseNotes((visible) => !visible)}>
-                    <Plus size={16} /> خيارات وملاحظات
-                  </button>
-                  {draftAlreadyLogged && (
-                    <button
-                      type="button"
-                      className="remove-from-session"
-                      onClick={() => { removeExerciseFromWorkout(exerciseToAdd); resetExerciseLogger(); setSheet(null); }}
-                    >
-                      <Trash2 size={15} /> إزالة من الحصة
-                    </button>
-                  )}
-                </div>
-                {showExerciseNotes && (
-                  <div className="logger-extras">
-                    <fieldset className="set-choice-block">
-                      <legend>نوع الجلسة</legend>
-                      <div className="set-type-segment" role="group" aria-label="نوع الجلسة">
-                        <button type="button" className={draftSetType === "working" ? "selected" : ""} onClick={() => setDraftSetType("working")}>مجموعة عمل</button>
-                        <button type="button" className={draftSetType === "warmup" ? "selected" : ""} onClick={() => setDraftSetType("warmup")}>إحماء</button>
-                      </div>
-                    </fieldset>
-                    <fieldset className="set-choice-block rir-choice">
-                      <legend><span>RIR</span><small>التكرارات المتبقية</small></legend>
-                      <div className="rir-chip-row" role="group" aria-label="التكرارات المتبقية">
-                        {[0, 1, 2, 3, 4, 5].map((rir) => (
-                          <button type="button" key={rir} className={draftRir === String(rir) ? "selected" : ""} onClick={() => setDraftRir(String(rir))} aria-pressed={draftRir === String(rir)}>{rir}</button>
-                        ))}
-                      </div>
-                    </fieldset>
-                    <textarea className="exercise-notes" value={exerciseNotes} onChange={(event) => setExerciseNotes(event.target.value)} placeholder="اكتب ملاحظة عن الأداء أو إعداد الجهاز" rows={3} />
-                  </div>
-                )}
 
                 <div className="exercise-save-actions">
                   <button type="submit" className="session-save">حفظ التمرين</button>

@@ -236,6 +236,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .exercise-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; width: 100%; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; transition: border-color .16s ease, background .16s ease; }
 .exercise-summary:hover { border-color: var(--line-strong); background: var(--surface-raised); }
 .exercise-summary:active { transform: scale(.99); }
+/* Day-vs-history grade: one shared strength, only the hue changes. Never green (--accent). */
+.exercise-summary.tone-dip { --tone: var(--yellow); }
+.exercise-summary.tone-progress { --tone: var(--blue); }
+.exercise-summary.tone-record { --tone: var(--violet); }
+.exercise-summary[class*="tone-"] { border-color: color-mix(in srgb, var(--tone) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 18%, transparent), 0 0 18px color-mix(in srgb, var(--tone) 16%, transparent); }
+.exercise-summary[class*="tone-"]:hover { border-color: color-mix(in srgb, var(--tone) 70%, transparent); }
 .exercise-summary-icon { display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-md); color: var(--muted); background: var(--surface-soft); }
 .exercise-summary-icon img { width: 100%; height: 100%; object-fit: cover; }
 .exercise-summary-title { display: grid; gap: 5px; min-width: 0; }
@@ -932,7 +938,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .history-title span { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; font-weight: 600; }
 .history-title svg { color: var(--accent); }
 .history-title small { color: var(--muted); font-size: 12px; }
-.history-table { display: grid; gap: 4px; padding: 0 8px 8px; }
+.history-title span em { color: var(--muted); font-size: 12px; font-style: normal; font-weight: 500; }
+/* Full history scrolls inside the card (newest on top, first session at the bottom);
+   off-screen rows skip layout/paint so long histories stay cheap. */
+.history-table { display: grid; gap: 4px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 8px; outline: 0; }
+.history-table > .history-row:not(.history-head) { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+.history-table > .history-head { position: sticky; top: 0; z-index: 1; background: var(--canvas); }
 .history-row { display: grid; grid-template-columns: 1.4fr .7fr .8fr .9fr; align-items: center; gap: 6px; min-height: 52px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-sm); background: var(--surface); font-size: 13px; }
 .history-row > *:not(:first-child) { text-align: center; }
 .history-row .history-date { display: grid; gap: 2px; }
@@ -964,8 +975,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .add-draft-set { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 46px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); color: var(--ink-dim); font-size: 13px; font-weight: 500; }
 .add-draft-set svg { color: var(--muted); }
 .add-draft-set:hover { border-color: var(--muted); color: var(--ink); }
-.notes-toggle { display: inline-flex; align-items: center; gap: 6px; width: max-content; padding: 6px 2px; color: var(--ink-dim); font-size: 13px; font-weight: 500; }
-.notes-toggle svg { color: var(--muted); }
 .exercise-notes { width: 100%; min-height: 72px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); outline: 0; color: var(--ink); background: var(--canvas); font-size: 14px; resize: vertical; }
 .exercise-save-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .session-save, .session-save-more { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 52px; border-radius: var(--r-md); font-size: 14px; font-weight: 650; }
