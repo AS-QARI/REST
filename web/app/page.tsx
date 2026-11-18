@@ -1136,14 +1136,14 @@ export default function Home() {
       isRecord: sessionRecords.get(session.id)?.has(exerciseId) ?? false,
     }];
   });
-  // The history scroller opens on five rows (last 4 sessions + the strongest one);
-  // size it to those rows so everything older is one scroll away.
-  const fitHistoryToFiveRows = (table: HTMLDivElement | null) => {
+  // The history scroller opens on four rows (last 3 sessions + the strongest, or the
+  // 4th session when the strongest is already among the 3); everything older is a scroll away.
+  const fitHistoryToFourRows = (table: HTMLDivElement | null) => {
     if (!table) return;
     const fit = () => {
       const rows = table.querySelectorAll<HTMLElement>(":scope > .history-row:not(.history-head)");
-      const fifth = rows.length > 5 ? rows[4] : undefined;
-      table.style.maxHeight = fifth ? `${fifth.offsetTop + fifth.offsetHeight + 8}px` : "";
+      const fourth = rows.length > 4 ? rows[3] : undefined;
+      table.style.maxHeight = fourth ? `${fourth.offsetTop + fourth.offsetHeight + 8}px` : "";
     };
     fit();
     void document.fonts?.ready.then(fit);
@@ -1170,6 +1170,15 @@ export default function Home() {
       entry.maxWeight > best.maxWeight || (entry.maxWeight === best.maxWeight && entry.topReps > best.topReps) ? entry : best
     ))
     : undefined;
+  // Strongest within the latest 3: mark that row in place. Otherwise pin it as the 4th row.
+  const strongestIsRecent = !!strongestHistoryEntry && exerciseHistory.slice(0, 3).includes(strongestHistoryEntry);
+  const historyRows = strongestHistoryEntry && !strongestIsRecent
+    ? [
+        ...exerciseHistory.slice(0, 3).map((entry) => ({ entry, pinned: false })),
+        { entry: strongestHistoryEntry, pinned: true },
+        ...exerciseHistory.slice(3).map((entry) => ({ entry, pinned: false })),
+      ]
+    : exerciseHistory.map((entry) => ({ entry, pinned: false }));
   // Everything framed as "before this session" measures against the session on screen.
   const sessionCutoff = data.activeWorkout
     ? { id: data.activeWorkout.id, date: selectedWorkoutDaySessions.find((session) => session.id === data.activeWorkout?.id)?.completedAt ?? data.activeWorkout.startedAt }
@@ -2412,28 +2421,31 @@ export default function Home() {
                   </div>
                   {exerciseHistory.length ? (
                     <>
-                      <div className="history-table" tabIndex={0} ref={fitHistoryToFiveRows} aria-label="آخر 4 جلسات ثم أقوى جلسة، والأقدم بالتمرير">
+                      <div className="history-table" tabIndex={0} ref={fitHistoryToFourRows} aria-label="آخر 3 جلسات مع أقوى جلسة، والأقدم بالتمرير">
                         <div className="history-row history-head"><span>التاريخ</span><span>جلسات</span><span>عدات</span><span>وزن</span></div>
-                        {[
-                          ...exerciseHistory.slice(0, 4).map((entry) => ({ entry, kind: "recent" as const })),
-                          ...(strongestHistoryEntry ? [{ entry: strongestHistoryEntry, kind: "best" as const }] : []),
-                          ...exerciseHistory.slice(4).map((entry) => ({ entry, kind: "older" as const })),
-                        ].map(({ entry, kind }) => (
-                          <div className={`history-row${kind === "best" ? " is-best" : entry.isRecord ? " is-record" : ""}${kind === "older" ? " history-older" : ""}`} key={`${kind}-${entry.id}`}>
-                            <span className="history-date">
-                              {kind === "best"
-                                ? <strong><Trophy size={12} /> أقوى جلسة</strong>
-                                : <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>}
-                              <small>{formatDate(entry.date)}{new Date(entry.date).getFullYear() !== new Date().getFullYear() && ` ${new Date(entry.date).getFullYear()}`}</small>
-                            </span>
-                            <b>{formatNumber(entry.setCount)}</b>
-                            <b dir="ltr">{entry.repLabel}</b>
-                            <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
-                          </div>
-                        ))}
+                        {historyRows.map(({ entry, pinned }, index) => {
+                          const isBest = pinned || (strongestIsRecent && entry === strongestHistoryEntry);
+                          return (
+                            <div
+                              className={`history-row${isBest ? " is-best" : entry.isRecord ? " is-record" : ""}${index >= 4 ? " history-older" : ""}`}
+                              key={`${pinned ? "best" : "session"}-${entry.id}`}
+                              title={isBest ? "أقوى جلسة" : undefined}
+                            >
+                              <span className="history-date">
+                                {pinned
+                                  ? <strong><Trophy size={12} /> أقوى جلسة</strong>
+                                  : <strong>{ARABIC_WEEK_DAYS[new Date(entry.date).getDay()]} {entry.isRecord && <RecordBadge compact />}</strong>}
+                                <small>{formatDate(entry.date)}{new Date(entry.date).getFullYear() !== new Date().getFullYear() && ` ${new Date(entry.date).getFullYear()}`}</small>
+                              </span>
+                              <b>{formatNumber(entry.setCount)}</b>
+                              <b dir="ltr">{entry.repLabel}</b>
+                              <b dir="ltr">{formatNumber(entry.maxWeight)}kg</b>
+                            </div>
+                          );
+                        })}
                       </div>
-                      {exerciseHistory.length > 4 && (
-                        <p className="history-more"><ChevronDown size={14} /> اسحب لعرض {countLabel(exerciseHistory.length - 4, "جلسة أقدم", "جلسات أقدم")}</p>
+                      {historyRows.length > 4 && (
+                        <p className="history-more"><ChevronDown size={14} /> اسحب لعرض {countLabel(historyRows.length - 4, "جلسة أقدم", "جلسات أقدم")}</p>
                       )}
                     </>
                   ) : <p className="history-empty">سجّل أول أداء لك، وسيظهر هنا في المرة القادمة.</p>}

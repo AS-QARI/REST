@@ -238,7 +238,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .exercise-summary:active { transform: scale(.99); }
 /* Day-vs-history grade. Glow strength follows the rank: violet (new weight) >
    blue (more reps) > yellow (weaker day). Never green (--accent). */
-.exercise-summary.tone-dip { --tone: var(--yellow); --tone-border: 55%; --tone-ring: 18%; --tone-glow: 16%; --tone-blur: 18px; }
+.exercise-summary.tone-dip { --tone: var(--yellow); --tone-border: 35%; --tone-ring: 10%; --tone-glow: 8%; --tone-blur: 14px; }
 .exercise-summary.tone-progress { --tone: var(--blue); --tone-border: 65%; --tone-ring: 24%; --tone-glow: 24%; --tone-blur: 22px; }
 .exercise-summary.tone-record { --tone: var(--violet); --tone-border: 80%; --tone-ring: 32%; --tone-glow: 36%; --tone-blur: 28px; }
 .exercise-summary[class*="tone-"] { border-color: color-mix(in srgb, var(--tone) var(--tone-border), transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) var(--tone-ring), transparent), 0 0 var(--tone-blur) color-mix(in srgb, var(--tone) var(--tone-glow), transparent); }
